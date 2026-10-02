@@ -116,12 +116,13 @@ Yubi Clean/
    ├── Interactive selection table with real-time points calculator
    └── Instant CSV / JSON export trigger
 
-[Stage 5: Safe Sequential Top-Down Deletion Engine] (UPCOMING)
-   ├── Monotonic top-down deletion queue
-   ├── Dropdown interaction handler with 450-600ms throttle
-   └── Live progress bar + Pause/Resume/Abort controls
+[Stage 5: Safe Sequential Top-Down Deletion Engine] (COMPLETED)
+   ├── Monotonic top-down deletion queue (pruner.ts)
+   ├── Shared singleton 3-dot dropdown detection (`tp-yt-iron-dropdown`) with 550ms throttle
+   ├── Confirmation modal with points deduction preview & one-click CSV backup recommendation
+   └── Live progress bar with Pause / Resume / Abort controls (PruneProgressModal.tsx)
 
-[Stage 6: Settings Toggle & ExtensionPay Monetization Gate]
+[Stage 6: Settings Toggle & ExtensionPay Monetization Gate] (UPCOMING)
    ├── Extension popup setting to enable/disable floating icon
    └── ExtensionPay tier enforcement (>75 video limit)
 

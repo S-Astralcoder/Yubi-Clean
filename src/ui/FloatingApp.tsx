@@ -17,8 +17,10 @@ import {
 } from 'lucide-react';
 import { UserQuota, VideoItem } from '../types';
 import { harvester, HarvestProgress } from '../content/harvester';
+import { pruner, PruneProgress } from '../content/pruner';
 import { exportVideosToCsv, exportVideosToJson } from '../utils/export';
 import { VideoReviewTable } from './components/VideoReviewTable';
+import { PruneProgressModal } from './components/PruneProgressModal';
 
 interface FloatingAppProps {
   playlistTitle?: string;
@@ -41,6 +43,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
   const [videosList, setVideosList] = useState<VideoItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Harvester Progress State
   const [harvestProgress, setHarvestProgress] = useState<HarvestProgress>({
     total: 0,
     deadCount: 0,
@@ -49,15 +52,30 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     isCompleted: false,
   });
 
-  // Subscribe to harvester progress and load storage state
+  // Pruner Progress & Modal State
+  const [isPruneModalOpen, setIsPruneModalOpen] = useState<boolean>(false);
+  const [pruneProgress, setPruneProgress] = useState<PruneProgress>({
+    total: 0,
+    completed: 0,
+    currentTitle: '',
+    currentId: '',
+    status: 'idle',
+  });
+
+  // Subscriptions and storage synchronization
   useEffect(() => {
-    // 1. Subscribe to live harvester updates
-    const unsubscribe = harvester.subscribe((p) => {
+    // 1. Subscribe to Harvester
+    const unsubHarvester = harvester.subscribe((p) => {
       setHarvestProgress(p);
       setVideosList(harvester.getVideos());
     });
 
-    // 2. Load persisted quota and previous scan records
+    // 2. Subscribe to Pruner
+    const unsubPruner = pruner.subscribe((p) => {
+      setPruneProgress(p);
+    });
+
+    // 3. Load persisted quota and previous scan records
     chrome.storage?.local?.get(['quota', 'videos', 'totalIndexed'], (res: Record<string, any>) => {
       if (res?.quota) {
         setQuota(res.quota as UserQuota);
@@ -82,7 +100,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
       }
     });
 
-    // 3. Listen for storage changes
+    // 4. Listen for storage changes
     const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
       if (changes.quota && changes.quota.newValue) {
         setQuota(changes.quota.newValue as UserQuota);
@@ -94,7 +112,8 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
 
     chrome.storage?.onChanged?.addListener(storageListener);
     return () => {
-      unsubscribe();
+      unsubHarvester();
+      unsubPruner();
       chrome.storage?.onChanged?.removeListener(storageListener);
     };
   }, []);
@@ -217,6 +236,66 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
 
   const handleExportJson = () => {
     exportVideosToJson(videosList, 'YT_WatchLater_FullBackup');
+  };
+
+  // ── Stage 5: Prune Handlers ──
+  const handleOpenPruneModal = () => {
+    if (selectedIds.size === 0 || !hasSufficientPoints) return;
+    setIsPruneModalOpen(true);
+  };
+
+  const handleConfirmStartPrune = async () => {
+    // 1. Sort monotonic top-down by DOM index to guarantee downward scrolling
+    const targetVideos = videosList
+      .filter((v) => selectedIds.has(v.id))
+      .sort((a, b) => a.domIndex - b.domIndex);
+
+    // 2. Execute deletion queue
+    const { deletedIds } = await pruner.executePrune(targetVideos);
+
+    if (deletedIds.length > 0) {
+      // 3. Calculate points consumed by successfully deleted items
+      let deadDel = 0;
+      let standardDel = 0;
+      for (const id of deletedIds) {
+        const item = videosList.find((v) => v.id === id);
+        if (item?.isUnavailable) deadDel++;
+        else standardDel++;
+      }
+      const pointsConsumed = Math.ceil(deadDel / 5) + standardDel;
+      const updatedPoints = Math.max(0, quota.pointsRemaining - pointsConsumed);
+
+      // 4. Update remaining videos list
+      const remainingVideos = videosList.filter((v) => !deletedIds.includes(v.id));
+      setVideosList(remainingVideos);
+
+      // 5. Clear deleted IDs from selection
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        deletedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+
+      // 6. Persist updated quota and remaining videos to chrome.storage.local
+      const rawRecords: Record<string, VideoItem> = {};
+      remainingVideos.forEach((v) => {
+        rawRecords[v.id] = v;
+      });
+
+      const updatedQuota: UserQuota = {
+        ...quota,
+        pointsRemaining: updatedPoints,
+      };
+      setQuota(updatedQuota);
+
+      await chrome.storage?.local?.set({
+        quota: updatedQuota,
+        videos: rawRecords,
+        totalIndexed: remainingVideos.length,
+      });
+
+      console.log(`[YT-WL-Gardener] Prune complete. Deducted ${pointsConsumed} pts. Remaining: ${updatedPoints} pts.`);
+    }
   };
 
   // Dynamic theme variables matching native YouTube
@@ -438,7 +517,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                     </div>
                   </div>
 
-                  {/* Fully Reactive Bulk Category Selectors with Visual Checkbox State */}
+                  {/* Reactive Bulk Category Selectors with Visual Checkbox State */}
                   <div className="space-y-2">
                     <div className={`text-xs font-semibold uppercase tracking-wider flex items-center justify-between ${themeClasses.mutedText}`}>
                       <span>Bulk Category Select</span>
@@ -446,7 +525,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                     </div>
                     
                     <div className="grid grid-cols-3 gap-2">
-                      {/* 1. Unavailable Selector Card */}
+                      {/* Unavailable Selector Card */}
                       <button 
                         onClick={() => handleToggleCategory('dead')}
                         disabled={categoryStats.dead.total === 0}
@@ -459,7 +538,6 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                         } disabled:opacity-40 disabled:cursor-not-allowed`}
                         title="Toggle selection of all dead/unavailable videos"
                       >
-                        {/* Checkbox indicator */}
                         <div className={`absolute top-2 right-2 flex items-center justify-center w-4 h-4 rounded border transition-colors ${
                           categoryStats.dead.isAllSelected
                             ? 'bg-red-500 border-red-500 text-white'
@@ -482,7 +560,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                         </span>
                       </button>
 
-                      {/* 2. Watched Selector Card */}
+                      {/* Watched Selector Card */}
                       <button 
                         onClick={() => handleToggleCategory('watched')}
                         disabled={categoryStats.watched.total === 0}
@@ -517,7 +595,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                         </span>
                       </button>
 
-                      {/* 3. Shorts Selector Card */}
+                      {/* Shorts Selector Card */}
                       <button 
                         onClick={() => handleToggleCategory('shorts')}
                         disabled={categoryStats.shorts.total === 0}
@@ -615,7 +693,9 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                         </div>
                       </div>
 
+                      {/* Primary Trigger Button for Stage 5 Purge */}
                       <button
+                        onClick={handleOpenPruneModal}
                         disabled={!hasSufficientPoints}
                         className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-bold text-xs tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed ${themeClasses.btnPrimary}`}
                         title={hasSufficientPoints ? 'Proceed to clean selected items' : 'Not enough points'}
@@ -665,6 +745,22 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
             </div>
 
           </div>
+
+          {/* ── Stage 5: Prune Confirmation & Progress Modal ── */}
+          <PruneProgressModal
+            isOpen={isPruneModalOpen}
+            onClose={() => setIsPruneModalOpen(false)}
+            onConfirmStart={handleConfirmStartPrune}
+            onPause={() => pruner.pause()}
+            onResume={() => pruner.resume()}
+            onAbort={() => pruner.abort()}
+            onExportCsv={() => handleExportCsv(false)}
+            progress={pruneProgress}
+            selectedCount={selectedIds.size}
+            requiredPoints={requiredPoints}
+            pointsRemaining={quota.pointsRemaining}
+            isDark={isDark}
+          />
         </>
       )}
     </div>
