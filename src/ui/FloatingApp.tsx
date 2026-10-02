@@ -21,6 +21,7 @@ import { pruner, PruneProgress } from '../content/pruner';
 import { exportVideosToCsv, exportVideosToJson } from '../utils/export';
 import { VideoReviewTable } from './components/VideoReviewTable';
 import { PruneProgressModal } from './components/PruneProgressModal';
+import { UpgradeModal } from './components/UpgradeModal';
 
 interface FloatingAppProps {
   playlistTitle?: string;
@@ -61,6 +62,9 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     currentId: '',
     status: 'idle',
   });
+
+  // Upgrade / Pricing Modal State
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState<boolean>(false);
 
   // Subscriptions and storage synchronization
   useEffect(() => {
@@ -176,8 +180,9 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     };
   }, [videosList, selectedIds]);
 
-  const hasSufficientPoints = quota.pointsRemaining >= requiredPoints;
-  const quotaPercent = Math.max(0, Math.min(100, (quota.pointsRemaining / quota.pointsTotal) * 100));
+  const isPro = quota.tier === 'pro';
+  const hasSufficientPoints = isPro || quota.pointsRemaining >= requiredPoints;
+  const quotaPercent = isPro ? 100 : Math.max(0, Math.min(100, (quota.pointsRemaining / quota.pointsTotal) * 100));
 
   const handleScanToggle = () => {
     if (harvestProgress.isScanning) {
@@ -240,7 +245,11 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
 
   // ── Stage 5: Prune Handlers ──
   const handleOpenPruneModal = () => {
-    if (selectedIds.size === 0 || !hasSufficientPoints) return;
+    if (selectedIds.size === 0) return;
+    if (!hasSufficientPoints) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
     setIsPruneModalOpen(true);
   };
 
@@ -396,9 +405,14 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                     <h1 className="text-xl font-bold tracking-tight">
                       YouTube Playlist Gardener
                     </h1>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${themeClasses.badge}`}>
-                      {quota.tier.toUpperCase()}
-                    </span>
+                    <button
+                      onClick={() => setIsUpgradeModalOpen(true)}
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all hover:scale-105 flex items-center space-x-1 ${themeClasses.badge}`}
+                      title="Click to view upgrade options & points"
+                    >
+                      <span>{quota.tier.replace('_', ' ').toUpperCase()}</span>
+                      <Sparkles size={11} className="text-amber-400" />
+                    </button>
                   </div>
                   <div className={`flex items-center space-x-2 text-xs mt-1 ${themeClasses.mutedText}`}>
                     <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -433,12 +447,18 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                         </div>
                         <div>
                           <div className="text-sm font-semibold">Usage Balance</div>
-                          <div className={`text-xs ${themeClasses.mutedText}`}>Free tier credits</div>
+                          <div className={`text-xs ${themeClasses.mutedText}`}>
+                            {isPro ? 'Lifetime License' : 'Cleaning credits'}
+                          </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="text-lg font-bold text-[#FF0000]">{quota.pointsRemaining}</span>
-                        <span className={`text-xs ${themeClasses.mutedText}`}> / {quota.pointsTotal} pts</span>
+                        <span className="text-lg font-bold text-[#FF0000]">
+                          {isPro ? 'Unlimited (∞)' : quota.pointsRemaining}
+                        </span>
+                        {!isPro && (
+                          <span className={`text-xs ${themeClasses.mutedText}`}> / {quota.pointsTotal} pts</span>
+                        )}
                       </div>
                     </div>
 
@@ -450,11 +470,21 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                       />
                     </div>
 
-                    {/* Rates breakdown */}
+                    {/* Rates breakdown and Upgrade trigger */}
                     <div className={`flex items-center justify-between pt-1 text-xs border-t ${themeClasses.divider} ${themeClasses.mutedText}`}>
-                      <span><strong>1 pt</strong> = 5 Unavailable</span>
-                      <span>•</span>
-                      <span><strong>1 pt</strong> = 1 Filtered</span>
+                      <div className="flex items-center space-x-1.5">
+                        <span><strong>1 pt</strong> = 5 Dead</span>
+                        <span>•</span>
+                        <span><strong>1 pt</strong> = 1 Video</span>
+                      </div>
+
+                      <button
+                        onClick={() => setIsUpgradeModalOpen(true)}
+                        className="flex items-center space-x-1 font-bold text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        <Sparkles size={11} />
+                        <span>Upgrade</span>
+                      </button>
                     </div>
                   </div>
 
@@ -693,15 +723,22 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                         </div>
                       </div>
 
-                      {/* Primary Trigger Button for Stage 5 Purge */}
+                      {/* Primary Trigger Button for Purge or Upgrade */}
                       <button
                         onClick={handleOpenPruneModal}
-                        disabled={!hasSufficientPoints}
-                        className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-bold text-xs tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed ${themeClasses.btnPrimary}`}
-                        title={hasSufficientPoints ? 'Proceed to clean selected items' : 'Not enough points'}
+                        className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-bold text-xs tracking-wide transition-all active:scale-[0.98] ${
+                          hasSufficientPoints
+                            ? themeClasses.btnPrimary
+                            : 'bg-amber-500 text-black hover:bg-amber-400 shadow'
+                        }`}
+                        title={hasSufficientPoints ? 'Proceed to clean selected items' : 'Not enough points — Click to upgrade'}
                       >
-                        <Trash2 size={15} />
-                        <span>Clean Selected ({selectedIds.size})</span>
+                        {hasSufficientPoints ? <Trash2 size={15} /> : <Sparkles size={15} />}
+                        <span>
+                          {hasSufficientPoints 
+                            ? `Clean Selected (${selectedIds.size})` 
+                            : 'Upgrade Points to Clean'}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -731,7 +768,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                 <span>•</span>
                 <span>Cost: {requiredPoints} pts</span>
                 <span>•</span>
-                <span>Available: {quota.pointsRemaining} pts</span>
+                <span>Available: {isPro ? 'Unlimited (∞)' : `${quota.pointsRemaining} pts`}</span>
               </div>
 
               {selectedIds.size > 0 && (
@@ -760,6 +797,15 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
             requiredPoints={requiredPoints}
             pointsRemaining={quota.pointsRemaining}
             isDark={isDark}
+          />
+
+          {/* ── Stage 6: Upgrade & Monetization Modal ── */}
+          <UpgradeModal
+            isOpen={isUpgradeModalOpen}
+            onClose={() => setIsUpgradeModalOpen(false)}
+            quota={quota}
+            isDark={isDark}
+            onQuotaUpdated={(newQuota) => setQuota(newQuota)}
           />
         </>
       )}

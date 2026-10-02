@@ -78,18 +78,24 @@ Yubi Clean/
     │   ├── index.ts                         # Content script entrypoint (SPA listener & host mount)
     │   ├── style.css                        # Tailwind & glassmorphism styles (injected into Shadow DOM)
     │   ├── harvester.ts                     # Virtual scroll & metadata harvesting engine
-    │   └── pruner.ts                        # Monotonic throttled deletion runner
+    ├── popup/
+    │   ├── index.tsx                        # Popup React entrypoint
+    │   ├── PopupApp.tsx                     # Popup settings, active tab detection, quota display
+    │   └── popup.css                        # Tailwind popup styles
+    ├── services/
+    │   └── payment.ts                       # ExtensionPay adapter & Sandbox test mode
     ├── ui/
-    │   ├── DrawerRoot.tsx                   # React root container for the in-page drawer & FAB
-    │   ├── components/                      # UI cards, filter chips, selection tables, progress bars
-    │   └── theme/                           # Luxury black & gold design tokens
+    │   ├── FloatingApp.tsx                  # In-page centered dashboard & FAB controller
+    │   ├── components/
+    │   │   ├── VideoReviewTable.tsx         # Virtual table, search, category chips, checkboxes
+    │   │   ├── PruneProgressModal.tsx       # Pre-flight confirmation & throttled deletion progress
+    │   │   └── UpgradeModal.tsx             # Pricing tiers (Free, Deep Clean, Lifetime Pro)
+    │   └── icons/
+    │       └── GardenerLogo.tsx             # Vector logo
     ├── types/
-    │   ├── index.ts                         # VideoItem, HarvesterStatus, PrunerStatus, StorageSchema
-    │   └── messages.ts                      # Runtime message schemas
+    │   └── index.ts                         # VideoItem, UserQuota, StorageSchema, etc.
     └── utils/
-        ├── dom.ts                           # YouTube DOM selectors & async element polling
-        ├── export.ts                        # CSV, JSON, and Markdown backup generation
-        └── storage.ts                       # Type-safe chrome.storage.local abstractions
+        └── export.ts                        # CSV & JSON zero-data-loss export utilities
 ```
 
 ---
@@ -122,11 +128,14 @@ Yubi Clean/
    ├── Confirmation modal with points deduction preview & one-click CSV backup recommendation
    └── Live progress bar with Pause / Resume / Abort controls (PruneProgressModal.tsx)
 
-[Stage 6: Settings Toggle & ExtensionPay Monetization Gate] (UPCOMING)
-   ├── Extension popup setting to enable/disable floating icon
-   └── ExtensionPay tier enforcement (>75 video limit)
+[Stage 6: Settings Toggle & ExtensionPay Monetization Gate] (COMPLETED)
+   ├── Extension popup UI (popup.html + PopupApp.tsx) with active tab detection
+   ├── Real-time floating action button toggle (`floatingIconEnabled`) via chrome.storage.onChanged
+   ├── ExtensionPay architecture with Sandbox / Test Mode for instant verification (`payment.ts`)
+   ├── Upgrade & pricing modal (`UpgradeModal.tsx`) for Deep Clean Pass ($4.99) and Lifetime Pro ($9.99)
+   └── Full tier enforcement and quota sync across in-page dashboard and browser action popup
 
-[Stage 7: Production Build, Asset Generation & CWS Metadata Readiness]
+[Stage 7: Production Build, Asset Generation & CWS Metadata Readiness] (UPCOMING)
    ├── Extension icons (16px, 48px, 128px)
    ├── CHROMEWEBSTORE.md metadata and permissions justification
    └── Distribution zip artifact

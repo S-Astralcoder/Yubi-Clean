@@ -16,7 +16,8 @@
     "type": "module"
   },
   "action": {
-    "default_title": "YT-WL-Gardener"
+    "default_title": "YT-WL-Gardener",
+    "default_popup": "popup.html"
   },
   "content_scripts": [
     {

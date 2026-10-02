@@ -181,7 +181,21 @@ themeObserver.observe(document.documentElement, {
   attributeFilter: ['dark'],
 });
 
-// 5. Fallback interval check for pushState edge cases
+// 5. Watch for settings changes (e.g. toggling floating icon on/off in extension popup)
+chrome.storage?.onChanged?.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.settings) {
+    const newSettings = changes.settings.newValue as { floatingIconEnabled?: boolean } | undefined;
+    if (newSettings && typeof newSettings.floatingIconEnabled === 'boolean') {
+      if (!newSettings.floatingIconEnabled) {
+        unmountUI();
+      } else if (isPlaylistUrl(window.location.href)) {
+        mountUI();
+      }
+    }
+  }
+});
+
+// 6. Fallback interval check for pushState edge cases
 setInterval(() => {
   if (window.location.href !== lastKnownUrl) {
     handleUrlChange();
