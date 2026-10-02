@@ -111,12 +111,12 @@ Yubi Clean/
    ├── Virtual scroll stepper with deduplicating Map
    └── Real-time indexing counter and scan/stop controls in UI
 
-[Stage 4: Local Algorithmic Classification, Filters & CSV Export] (UPCOMING)
+[Stage 4: Local Algorithmic Classification, Filters & CSV Export] (COMPLETED)
    ├── Filter chips: Dead/Private, Watched % slider, Channel breakdown
-   ├── Interactive selection table
+   ├── Interactive selection table with real-time points calculator
    └── Instant CSV / JSON export trigger
 
-[Stage 5: Safe Sequential Top-Down Deletion Engine]
+[Stage 5: Safe Sequential Top-Down Deletion Engine] (UPCOMING)
    ├── Monotonic top-down deletion queue
    ├── Dropdown interaction handler with 450-600ms throttle
    └── Live progress bar + Pause/Resume/Abort controls

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { GardenerLogo } from './icons/GardenerLogo';
 import { 
   X, 
@@ -6,14 +6,18 @@ import {
   EyeOff, 
   CheckCircle2, 
   Download, 
-  ChevronRight,
-  ShieldCheck,
-  RefreshCw,
-  Coins,
-  Square
+  ChevronRight, 
+  ShieldCheck, 
+  RefreshCw, 
+  Coins, 
+  Square,
+  AlertTriangle,
+  FileJson
 } from 'lucide-react';
-import { UserQuota } from '../types';
+import { UserQuota, VideoItem } from '../types';
 import { harvester, HarvestProgress } from '../content/harvester';
+import { exportVideosToCsv, exportVideosToJson } from '../utils/export';
+import { VideoReviewTable } from './components/VideoReviewTable';
 
 interface FloatingAppProps {
   playlistTitle?: string;
@@ -33,6 +37,9 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     tier: 'free'
   });
 
+  const [videosList, setVideosList] = useState<VideoItem[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const [harvestProgress, setHarvestProgress] = useState<HarvestProgress>({
     total: 0,
     deadCount: 0,
@@ -46,6 +53,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     // 1. Subscribe to live harvester updates
     const unsubscribe = harvester.subscribe((p) => {
       setHarvestProgress(p);
+      setVideosList(harvester.getVideos());
     });
 
     // 2. Load persisted quota and previous scan records
@@ -54,7 +62,9 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
         setQuota(res.quota as UserQuota);
       }
       if (res?.videos && typeof res?.totalIndexed === 'number') {
-        const videos = Object.values(res.videos) as any[];
+        const videos = Object.values(res.videos) as VideoItem[];
+        setVideosList(videos);
+
         let dead = 0;
         let watched = 0;
         videos.forEach((v) => {
@@ -76,6 +86,9 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
       if (changes.quota && changes.quota.newValue) {
         setQuota(changes.quota.newValue as UserQuota);
       }
+      if (changes.videos && changes.videos.newValue) {
+        setVideosList(Object.values(changes.videos.newValue) as VideoItem[]);
+      }
     };
 
     chrome.storage?.onChanged?.addListener(storageListener);
@@ -85,14 +98,92 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     };
   }, []);
 
+  // Calculate real-time points required for currently selected videos
+  const { deadSelected, standardSelected, requiredPoints } = useMemo(() => {
+    let dead = 0;
+    let standard = 0;
+
+    for (const id of selectedIds) {
+      const item = videosList.find((v) => v.id === id);
+      if (item) {
+        if (item.isUnavailable) {
+          dead++;
+        } else {
+          standard++;
+        }
+      }
+    }
+
+    const deadPoints = Math.ceil(dead / 5);
+    const cost = deadPoints + standard;
+
+    return {
+      deadSelected: dead,
+      standardSelected: standard,
+      requiredPoints: cost,
+    };
+  }, [videosList, selectedIds]);
+
+  const hasSufficientPoints = quota.pointsRemaining >= requiredPoints;
   const quotaPercent = Math.max(0, Math.min(100, (quota.pointsRemaining / quota.pointsTotal) * 100));
 
   const handleScanToggle = () => {
     if (harvestProgress.isScanning) {
       harvester.stop();
     } else {
+      setSelectedIds(new Set());
       harvester.start();
     }
+  };
+
+  // Selection handlers
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectMultiple = (ids: string[], select: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => {
+        if (select) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
+  };
+
+  // Category Quick Toggle
+  const handleToggleCategory = (category: 'dead' | 'watched' | 'shorts') => {
+    let targetVideos: VideoItem[] = [];
+    if (category === 'dead') {
+      targetVideos = videosList.filter((v) => v.isUnavailable);
+    } else if (category === 'watched') {
+      targetVideos = videosList.filter((v) => v.isWatched || v.watchProgressPercent >= 90);
+    } else if (category === 'shorts') {
+      targetVideos = videosList.filter((v) => v.durationSeconds < 60 && !v.isUnavailable);
+    }
+
+    const targetIds = targetVideos.map((v) => v.id);
+    const allSelected = targetIds.length > 0 && targetIds.every((id) => selectedIds.has(id));
+
+    handleSelectMultiple(targetIds, !allSelected);
+  };
+
+  // Export handlers
+  const handleExportCsv = (onlySelected = false) => {
+    const listToExport = onlySelected 
+      ? videosList.filter((v) => selectedIds.has(v.id))
+      : videosList;
+    exportVideosToCsv(listToExport, onlySelected ? 'YT_WatchLater_Selected' : 'YT_WatchLater_FullBackup');
+  };
+
+  const handleExportJson = () => {
+    exportVideosToJson(videosList, 'YT_WatchLater_FullBackup');
   };
 
   // Dynamic theme variables matching native YouTube
@@ -153,6 +244,12 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                 •
               </span>
             </span>
+          ) : selectedIds.size > 0 ? (
+            <span className="absolute -top-1 -right-1 flex h-4 w-4">
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-[#FF0000] text-[9px] font-bold text-white items-center justify-center">
+                {selectedIds.size}
+              </span>
+            </span>
           ) : (
             <span className="absolute top-1 right-1 flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -172,7 +269,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
           />
 
           {/* Floating Rounded Panel */}
-          <div className={`fixed top-1/2 -translate-y-1/2 right-6 h-[86vh] w-[42vw] min-w-[440px] max-w-[620px] z-[9999999] flex flex-col rounded-2xl overflow-hidden backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200 ease-out ${themeClasses.modal}`}>
+          <div className={`fixed top-1/2 -translate-y-1/2 right-6 h-[88vh] w-[44vw] min-w-[460px] max-w-[640px] z-[9999999] flex flex-col rounded-2xl overflow-hidden backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200 ease-out ${themeClasses.modal}`}>
             
             {/* Header */}
             <div className={`flex items-center justify-between px-6 py-4 ${themeClasses.header}`}>
@@ -207,28 +304,28 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
             </div>
 
             {/* Scrollable Content Body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
               {/* Clean Usage Balance Box */}
-              <div className={`p-4 rounded-xl space-y-3 ${themeClasses.card}`}>
+              <div className={`p-3.5 rounded-xl space-y-2.5 ${themeClasses.card}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2.5">
                     <div className="p-1.5 rounded-lg bg-red-500/10 text-[#FF0000]">
-                      <Coins size={17} />
+                      <Coins size={16} />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold">Usage Balance</div>
-                      <div className={`text-xs ${themeClasses.mutedText}`}>Remaining cleanup points</div>
+                      <div className="text-xs font-semibold">Usage Balance</div>
+                      <div className={`text-[11px] ${themeClasses.mutedText}`}>Remaining cleanup points</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-base font-bold text-[#FF0000]">{quota.pointsRemaining}</span>
+                    <span className="text-sm font-bold text-[#FF0000]">{quota.pointsRemaining}</span>
                     <span className={`text-xs ${themeClasses.mutedText}`}> / {quota.pointsTotal} pts</span>
                   </div>
                 </div>
 
                 {/* Progress bar */}
-                <div className={`w-full rounded-full h-2 overflow-hidden ${themeClasses.barTrack}`}>
+                <div className={`w-full rounded-full h-1.5 overflow-hidden ${themeClasses.barTrack}`}>
                   <div 
                     className="bg-[#FF0000] h-full rounded-full transition-all duration-300"
                     style={{ width: `${quotaPercent}%` }}
@@ -243,16 +340,16 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                 </div>
               </div>
 
-              {/* Action Banner / Harvester Controller */}
-              <div className={`p-4 rounded-xl space-y-3 ${themeClasses.card}`}>
+              {/* Harvester Scan Trigger Card */}
+              <div className={`p-3.5 rounded-xl space-y-2.5 ${themeClasses.card}`}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-semibold">Playlist Harvester</h2>
-                    <p className={`text-xs mt-0.5 ${themeClasses.mutedText}`}>
+                    <h2 className="text-xs font-semibold">Playlist Harvester</h2>
+                    <p className={`text-[11px] mt-0.5 ${themeClasses.mutedText}`}>
                       {harvestProgress.isScanning 
-                        ? `Auto-scrolling and indexing... Found ${harvestProgress.total} items so far.`
+                        ? `Indexing playlist... Found ${harvestProgress.total} items so far.`
                         : harvestProgress.isCompleted
-                        ? `Harvest complete! ${harvestProgress.total} videos indexed and categorized.`
+                        ? `Analysis complete! ${harvestProgress.total} videos indexed and categorized.`
                         : 'Scan and index playlist items to identify dead videos, watched content, and durations.'}
                     </p>
                   </div>
@@ -261,23 +358,23 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                 {/* Primary Scan / Stop Toggle Button */}
                 <button
                   onClick={handleScanToggle}
-                  className={`w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-medium text-xs tracking-wide transition-all duration-150 active:scale-[0.99] ${
+                  className={`w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl font-medium text-xs tracking-wide transition-all duration-150 active:scale-[0.99] ${
                     harvestProgress.isScanning ? themeClasses.btnStop : themeClasses.btnPrimary
                   }`}
                 >
                   {harvestProgress.isScanning ? (
                     <>
-                      <Square size={14} className="fill-current" />
+                      <Square size={13} className="fill-current" />
                       <span>Stop Scanning ({harvestProgress.total} Indexed)</span>
                     </>
                   ) : harvestProgress.total > 0 ? (
                     <>
-                      <RefreshCw size={14} />
+                      <RefreshCw size={13} />
                       <span>Re-Scan Playlist ({harvestProgress.total} Items)</span>
                     </>
                   ) : (
                     <>
-                      <RefreshCw size={14} />
+                      <RefreshCw size={13} />
                       <span>Scan & Index Playlist</span>
                     </>
                   )}
@@ -285,103 +382,190 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
               </div>
 
               {/* Real-time Metrics Grid */}
-              <div className="grid grid-cols-3 gap-2.5">
-                <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
-                  <div className="text-xl font-bold">{harvestProgress.total}</div>
-                  <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>Indexed</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className={`p-2.5 rounded-xl text-center ${themeClasses.subCard}`}>
+                  <div className="text-lg font-bold">{harvestProgress.total}</div>
+                  <div className={`text-[10px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>Indexed</div>
                 </div>
 
-                <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
-                  <div className="text-xl font-bold text-red-500">{harvestProgress.deadCount}</div>
-                  <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>Unavailable</div>
+                <div className={`p-2.5 rounded-xl text-center ${themeClasses.subCard}`}>
+                  <div className="text-lg font-bold text-red-500">{harvestProgress.deadCount}</div>
+                  <div className={`text-[10px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>Unavailable</div>
                 </div>
 
-                <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
-                  <div className="text-xl font-bold text-emerald-500">{harvestProgress.watchedCount}</div>
-                  <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>100% Watched</div>
+                <div className={`p-2.5 rounded-xl text-center ${themeClasses.subCard}`}>
+                  <div className="text-lg font-bold text-emerald-500">{harvestProgress.watchedCount}</div>
+                  <div className={`text-[10px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>100% Watched</div>
                 </div>
               </div>
 
-              {/* Filter Categories Preview (Stage 4) */}
-              <div className="space-y-2.5">
+              {/* Filter Categories Quick Selectors */}
+              <div className="space-y-2">
                 <div className={`text-xs font-semibold uppercase tracking-wider flex items-center justify-between ${themeClasses.mutedText}`}>
-                  <span>Quick Filters</span>
-                  <span className="text-[10px]">Stage 4 Preview</span>
+                  <span>Quick Select Filters</span>
+                  <span className="text-[10px]">Click to Select / Deselect</span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-2">
-                  <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
-                    <div className="flex items-center space-x-2">
-                      <EyeOff size={14} className="text-red-500" />
-                      <span>Dead / Private</span>
+                <div className="grid grid-cols-3 gap-2">
+                  <button 
+                    onClick={() => handleToggleCategory('dead')}
+                    className={`flex items-center justify-between p-2 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <EyeOff size={13} className="text-red-500 flex-shrink-0" />
+                      <span className="truncate">Dead</span>
                     </div>
-                    <span className={`text-[10px] ${themeClasses.mutedText}`}>
-                      {harvestProgress.deadCount} items
+                    <span className={`text-[10px] ml-1 ${themeClasses.mutedText}`}>
+                      {harvestProgress.deadCount}
                     </span>
                   </button>
 
-                  <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle2 size={14} className="text-emerald-500" />
-                      <span>100% Completed</span>
+                  <button 
+                    onClick={() => handleToggleCategory('watched')}
+                    className={`flex items-center justify-between p-2 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <CheckCircle2 size={13} className="text-emerald-500 flex-shrink-0" />
+                      <span className="truncate">Watched</span>
                     </div>
-                    <span className={`text-[10px] ${themeClasses.mutedText}`}>
-                      {harvestProgress.watchedCount} items
+                    <span className={`text-[10px] ml-1 ${themeClasses.mutedText}`}>
+                      {harvestProgress.watchedCount}
                     </span>
                   </button>
 
-                  <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
-                    <div className="flex items-center space-x-2">
-                      <Trash2 size={14} />
-                      <span>Shorts (&lt;60s)</span>
+                  <button 
+                    onClick={() => handleToggleCategory('shorts')}
+                    className={`flex items-center justify-between p-2 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Trash2 size={13} className="flex-shrink-0" />
+                      <span className="truncate">Shorts</span>
                     </div>
-                    <span className={`text-[10px] ${themeClasses.mutedText}`}>Stage 4</span>
-                  </button>
-
-                  <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
-                    <div className="flex items-center space-x-2">
-                      <RefreshCw size={14} />
-                      <span>Partially Watched</span>
-                    </div>
-                    <span className={`text-[10px] ${themeClasses.mutedText}`}>Stage 4</span>
+                    <span className={`text-[10px] ml-1 ${themeClasses.mutedText}`}>
+                      &lt;60s
+                    </span>
                   </button>
                 </div>
               </div>
 
+              {/* Dynamic Selection & Cost Banner */}
+              {selectedIds.size > 0 && (
+                <div className={`p-3 rounded-xl border ${
+                  hasSufficientPoints ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'
+                }`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-semibold text-white">Selected {selectedIds.size} videos</span>
+                      <span className={`text-[11px] block mt-0.5 ${themeClasses.mutedText}`}>
+                        {deadSelected} dead ({Math.ceil(deadSelected / 5)} pts) • {standardSelected} standard ({standardSelected} pts)
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-[#FF0000] text-sm">{requiredPoints} pts</div>
+                      <div className="text-[10px] text-neutral-400">
+                        {quota.pointsRemaining - requiredPoints >= 0 
+                          ? `${quota.pointsRemaining - requiredPoints} pts left`
+                          : 'Points exceeded'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {!hasSufficientPoints && (
+                    <div className="flex items-center space-x-1.5 text-[11px] text-amber-400 mt-2 pt-2 border-t border-amber-500/20">
+                      <AlertTriangle size={13} />
+                      <span>Insufficient points. Need {requiredPoints - quota.pointsRemaining} more points.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Interactive Video Review Table (Stage 4 Core) */}
+              {videosList.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className={`text-xs font-semibold uppercase tracking-wider flex items-center justify-between ${themeClasses.mutedText}`}>
+                    <span>Review Playlist Videos</span>
+                    {selectedIds.size > 0 && (
+                      <button
+                        onClick={() => setSelectedIds(new Set())}
+                        className="text-[11px] text-red-500 hover:underline"
+                      >
+                        Clear Selection ({selectedIds.size})
+                      </button>
+                    )}
+                  </div>
+
+                  <VideoReviewTable
+                    videos={videosList}
+                    selectedIds={selectedIds}
+                    onToggleSelect={handleToggleSelect}
+                    onSelectMultiple={handleSelectMultiple}
+                    isDark={isDark}
+                  />
+                </div>
+              )}
+
               {/* Safety & Backup Card */}
-              <div className={`p-4 rounded-xl space-y-2.5 ${themeClasses.subCard}`}>
+              <div className={`p-3.5 rounded-xl space-y-2.5 ${themeClasses.subCard}`}>
                 <div className="flex items-center space-x-2 text-xs font-semibold">
                   <ShieldCheck size={16} className="text-emerald-500" />
-                  <span>Zero Data Loss Protection</span>
+                  <span>Zero Data Loss Guarantee</span>
                 </div>
                 <p className={`text-[11px] leading-normal ${themeClasses.mutedText}`}>
-                  Export your full playlist to CSV or JSON before initiating any deletion sequence.
+                  Export your full playlist backup before initiating any removal.
                 </p>
-                <button
-                  disabled={harvestProgress.total === 0}
-                  className={`w-full flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${themeClasses.btnSecondary}`}
-                >
-                  <Download size={14} />
-                  <span>Export Playlist Backup (CSV)</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={videosList.length === 0}
+                    onClick={() => handleExportCsv(false)}
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${themeClasses.btnSecondary}`}
+                  >
+                    <Download size={13} />
+                    <span>Backup All (CSV)</span>
+                  </button>
+
+                  <button
+                    disabled={videosList.length === 0}
+                    onClick={handleExportJson}
+                    className={`flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${themeClasses.btnSecondary}`}
+                    title="Export as JSON"
+                  >
+                    <FileJson size={13} />
+                    <span>JSON</span>
+                  </button>
+                </div>
               </div>
 
             </div>
 
-            {/* Footer */}
+            {/* Footer with Stage 5 Purge Hook */}
             <div className={`px-6 py-3.5 flex items-center justify-between text-xs ${themeClasses.footer}`}>
-              <span className="flex items-center space-x-2">
-                <span className="font-medium">YT-WL-Gardener</span>
-                <span>•</span>
-                <span>{quota.pointsRemaining} Points Available</span>
-              </span>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center space-x-1 hover:text-white transition-colors ${themeClasses.mutedText}`}
-              >
-                <span>Dismiss</span>
-                <ChevronRight size={14} />
-              </button>
+              <div>
+                <span className="font-semibold text-white">
+                  {selectedIds.size > 0 ? `${selectedIds.size} Selected` : `${videosList.length} Total`}
+                </span>
+                <span className={`text-[11px] ml-2 ${themeClasses.mutedText}`}>
+                  {selectedIds.size > 0 ? `Cost: ${requiredPoints} pts` : `${quota.pointsRemaining} pts free`}
+                </span>
+              </div>
+
+              {selectedIds.size > 0 ? (
+                <button
+                  disabled={!hasSufficientPoints}
+                  className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-xl font-medium text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed ${themeClasses.btnPrimary}`}
+                  title={hasSufficientPoints ? 'Proceed to clean selected items' : 'Not enough points'}
+                >
+                  <Trash2 size={13} />
+                  <span>Clean Selected ({selectedIds.size})</span>
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center space-x-1 hover:text-white transition-colors ${themeClasses.mutedText}`}
+                >
+                  <span>Dismiss</span>
+                  <ChevronRight size={14} />
+                </button>
+              )}
             </div>
 
           </div>
