@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom glassmorphism & metallic gold accents */
+.gold-gradient-text {
+  background: linear-gradient(135deg, #FFF6D6 0%, #D4AF37 50%, #AA771C 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-border-gradient {
+  border-image: linear-gradient(to bottom right, #D4AF37, rgba(212, 175, 55, 0.2)) 1;
+}
+
+.glass-panel {
+  background: rgba(18, 18, 20, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}

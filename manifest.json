@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "YT-WL-Gardener - YouTube Watch Later Purger",
+  "version": "0.1.0",
+  "description": "Smart, categorizable, and safe YouTube Watch Later and playlist cleaner.",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://www.youtube.com/*",
+    "https://*.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "YT-WL-Gardener"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "https://*.youtube.com/*"
+      ],
+      "js": [
+        "src/content/index.ts"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}
