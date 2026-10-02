@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { GardenerLogo } from './icons/GardenerLogo';
 import { 
   X, 
-  Sparkles, 
   Trash2, 
   EyeOff, 
   CheckCircle2, 
@@ -10,19 +9,20 @@ import {
   ChevronRight,
   ShieldCheck,
   RefreshCw,
-  Coins,
-  Info
+  Coins
 } from 'lucide-react';
 import { UserQuota } from '../types';
 
 interface FloatingAppProps {
   playlistTitle?: string;
   isWatchLater?: boolean;
+  isDark?: boolean;
 }
 
 export const FloatingApp: React.FC<FloatingAppProps> = ({ 
   playlistTitle = 'Watch Later',
-  isWatchLater = true 
+  isWatchLater = true,
+  isDark = true
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isScanning, setIsScanning] = useState<boolean>(false);
@@ -68,58 +68,92 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
 
   const quotaPercent = Math.max(0, Math.min(100, (quota.pointsRemaining / quota.pointsTotal) * 100));
 
+  // Dynamic theme variables matching native YouTube
+  const themeClasses = isDark ? {
+    container: 'yt-dark text-[#F1F1F1]',
+    fab: 'bg-[#0F0F0F] text-[#F1F1F1] border border-white/20 shadow-yt-fab hover:bg-[#212121]',
+    backdrop: 'bg-black/55 backdrop-blur-[2px]',
+    modal: 'bg-[#0F0F0F]/95 text-[#F1F1F1] border border-white/15 shadow-yt-modal',
+    header: 'border-b border-white/10 bg-[#181818]/80',
+    logoContainer: 'bg-[#212121] border border-white/10',
+    badge: 'bg-white/10 text-white/90 border border-white/10',
+    closeBtn: 'text-neutral-400 hover:text-white hover:bg-white/10',
+    card: 'bg-[#1E1E1E]/80 border border-white/10',
+    subCard: 'bg-[#181818]/60 border border-white/5',
+    barTrack: 'bg-white/10',
+    btnPrimary: 'bg-[#FF0000] hover:bg-[#CC0000] text-white shadow-md active:bg-[#AA0000]',
+    btnSecondary: 'bg-[#272727] hover:bg-[#383838] text-white border border-white/10',
+    btnChip: 'bg-[#212121] hover:bg-[#2A2A2A] text-neutral-200 border border-white/10',
+    footer: 'border-t border-white/10 bg-[#181818]/80 text-neutral-400',
+    mutedText: 'text-[#AAAAAA]',
+  } : {
+    container: 'yt-light text-[#0F0F0F]',
+    fab: 'bg-white text-[#0F0F0F] border border-black/15 shadow-yt-fab hover:bg-[#F2F2F2]',
+    backdrop: 'bg-black/25 backdrop-blur-[2px]',
+    modal: 'bg-white/95 text-[#0F0F0F] border border-black/15 shadow-yt-modal-light',
+    header: 'border-b border-black/10 bg-[#F9F9F9]/80',
+    logoContainer: 'bg-[#F2F2F2] border border-black/10',
+    badge: 'bg-black/5 text-black/80 border border-black/10',
+    closeBtn: 'text-neutral-500 hover:text-black hover:bg-black/5',
+    card: 'bg-[#F8F8F8] border border-black/10',
+    subCard: 'bg-[#F2F2F2]/70 border border-black/5',
+    barTrack: 'bg-black/10',
+    btnPrimary: 'bg-[#FF0000] hover:bg-[#CC0000] text-white shadow-sm active:bg-[#AA0000]',
+    btnSecondary: 'bg-[#F2F2F2] hover:bg-[#E5E5E5] text-[#0F0F0F] border border-black/10',
+    btnChip: 'bg-[#F2F2F2] hover:bg-[#EAEAEA] text-neutral-800 border border-black/10',
+    footer: 'border-t border-black/10 bg-[#F9F9F9]/80 text-neutral-500',
+    mutedText: 'text-[#606060]',
+  };
+
   return (
-    <div className="font-sans antialiased text-neutral-200 select-none">
+    <div className={`font-sans antialiased select-none ${themeClasses.container}`}>
       {/* ── 1. Floating Action Button (FAB) ── */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-[9999999] group flex items-center justify-center w-14 h-14 rounded-full bg-obsidian-950/90 border border-gold-500/50 hover:border-gold-400 backdrop-blur-md shadow-gold-glow hover:shadow-[0_0_25px_rgba(212,175,55,0.5)] transition-all duration-300 hover:scale-105 active:scale-95"
+          className={`fixed bottom-6 right-6 z-[9999999] group flex items-center justify-center w-14 h-14 rounded-full backdrop-blur-md transition-all duration-200 hover:scale-105 active:scale-95 ${themeClasses.fab}`}
           title="Open YT-WL-Gardener"
         >
-          {/* Subtle inner dent ring */}
-          <div className="absolute inset-0.5 rounded-full border border-white/5 pointer-events-none" />
-          
-          <GardenerLogo size={32} className="transition-transform duration-300 group-hover:rotate-6" />
+          <GardenerLogo size={32} isDark={isDark} className="transition-transform duration-200 group-hover:rotate-6" />
 
-          {/* Glowing pulse indicator dot */}
+          {/* Pulse dot */}
           <span className="absolute top-1 right-1 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-gold-500 border border-obsidian-950"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#FF0000] border border-black/20"></span>
           </span>
         </button>
       )}
 
-      {/* ── 2. Grammarly-Style Floating Card Modal ── */}
+      {/* ── 2. Native YouTube Floating Modal (Grammarly-Style 42% W / 86% H) ── */}
       {isOpen && (
         <>
-          {/* Ambient blurred backdrop overlay to focus on the modal */}
+          {/* Subtle Ambient Backdrop */}
           <div 
             onClick={() => setIsOpen(false)}
-            className="fixed inset-0 z-[9999998] bg-black/45 backdrop-blur-[3px] transition-opacity duration-300"
+            className={`fixed inset-0 z-[9999998] transition-opacity duration-200 ${themeClasses.backdrop}`}
           />
 
-          {/* Floating Rounded Modal (42% width, 86% height, anchored right with margin) */}
-          <div className="fixed top-1/2 -translate-y-1/2 right-6 h-[86vh] w-[42vw] min-w-[440px] max-w-[620px] z-[9999999] flex flex-col rounded-2xl overflow-hidden bg-[#0D0D10]/95 backdrop-blur-2xl border border-gold-500/35 shadow-[0_25px_70px_rgba(0,0,0,0.85),0_0_35px_rgba(212,175,55,0.18)] animate-in fade-in zoom-in-95 duration-250 ease-out">
+          {/* Floating Rounded Panel */}
+          <div className={`fixed top-1/2 -translate-y-1/2 right-6 h-[86vh] w-[42vw] min-w-[440px] max-w-[620px] z-[9999999] flex flex-col rounded-2xl overflow-hidden backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200 ease-out ${themeClasses.modal}`}>
             
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gold-500/20 bg-obsidian-900/70">
+            <div className={`flex items-center justify-between px-6 py-4 ${themeClasses.header}`}>
               <div className="flex items-center space-x-3.5">
-                <div className="p-2 rounded-xl bg-obsidian-850 border border-gold-500/30 shadow-inner-dent">
-                  <GardenerLogo size={26} />
+                <div className={`p-2 rounded-xl ${themeClasses.logoContainer}`}>
+                  <GardenerLogo size={26} isDark={isDark} />
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h1 className="text-lg font-bold tracking-wide gold-gradient-text">
+                    <h1 className="text-lg font-bold tracking-tight">
                       YT Gardener
                     </h1>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-gold-500/15 text-gold-300 border border-gold-500/30">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${themeClasses.badge}`}>
                       {quota.tier.toUpperCase()}
                     </span>
                   </div>
-                  <div className="flex items-center space-x-1.5 text-xs text-neutral-400 mt-0.5">
-                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>{isWatchLater ? 'Watch Later Playlist' : playlistTitle}</span>
+                  <div className={`flex items-center space-x-1.5 text-xs mt-0.5 ${themeClasses.mutedText}`}>
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{isWatchLater ? 'Watch Later' : playlistTitle}</span>
                   </div>
                 </div>
               </div>
@@ -127,7 +161,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
               {/* Close Button */}
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-2 rounded-full text-neutral-400 hover:text-gold-300 hover:bg-gold-500/10 border border-transparent hover:border-gold-500/30 transition-all duration-200"
+                className={`p-2 rounded-full transition-colors duration-150 ${themeClasses.closeBtn}`}
                 title="Close"
               >
                 <X size={19} />
@@ -137,63 +171,53 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
             {/* Scrollable Content Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-              {/* Usage & Points Balance Card */}
-              <div className="p-4 rounded-xl bg-gradient-to-br from-obsidian-900/90 to-obsidian-850/80 border border-gold-500/30 shadow-inner-dent space-y-3">
+              {/* Clean Usage Balance Box (Simplified - No redundant status tag) */}
+              <div className={`p-4 rounded-xl space-y-3 ${themeClasses.card}`}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="p-1.5 rounded-lg bg-gold-500/10 text-gold-400 border border-gold-500/20">
-                      <Coins size={16} />
+                  <div className="flex items-center space-x-2.5">
+                    <div className="p-1.5 rounded-lg bg-red-500/10 text-[#FF0000]">
+                      <Coins size={17} />
                     </div>
                     <div>
-                      <div className="text-xs font-semibold text-neutral-200">Usage Balance</div>
-                      <div className="text-[11px] text-neutral-400">Available video cleanup credits</div>
+                      <div className="text-sm font-semibold">Usage Balance</div>
+                      <div className={`text-xs ${themeClasses.mutedText}`}>Remaining cleanup points</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-base font-bold text-gold-400">{quota.pointsRemaining}</span>
-                    <span className="text-xs text-neutral-500"> / {quota.pointsTotal} pts</span>
+                    <span className="text-base font-bold text-[#FF0000]">{quota.pointsRemaining}</span>
+                    <span className={`text-xs ${themeClasses.mutedText}`}> / {quota.pointsTotal} pts</span>
                   </div>
                 </div>
 
                 {/* Progress bar */}
-                <div className="w-full bg-neutral-900 rounded-full h-2 overflow-hidden border border-neutral-800">
+                <div className={`w-full rounded-full h-2 overflow-hidden ${themeClasses.barTrack}`}>
                   <div 
-                    className="bg-gradient-to-r from-gold-600 via-gold-400 to-amber-300 h-full rounded-full transition-all duration-500 shadow-gold-subtle"
+                    className="bg-[#FF0000] h-full rounded-full transition-all duration-300"
                     style={{ width: `${quotaPercent}%` }}
                   />
                 </div>
 
-                {/* Pricing Rules Legend */}
-                <div className="flex items-center justify-between pt-1 text-[11px] text-neutral-400 border-t border-neutral-800/80">
-                  <span className="flex items-center gap-1 text-gold-400/90 font-medium">
-                    <Info size={12} />
-                    Rates:
-                  </span>
-                  <span><strong>1 pt</strong> = 5 Dead/Private Videos</span>
-                  <span className="text-neutral-600">•</span>
+                {/* Rates breakdown */}
+                <div className={`flex items-center justify-between pt-1 text-[11px] border-t border-black/5 dark:border-white/5 ${themeClasses.mutedText}`}>
+                  <span><strong>1 pt</strong> = 5 Unavailable Videos</span>
+                  <span>•</span>
                   <span><strong>1 pt</strong> = 1 Filtered Video</span>
                 </div>
               </div>
 
               {/* Action Banner / Scan Controller */}
-              <div className="p-4 rounded-xl bg-obsidian-900/70 border border-gold-500/20 shadow-inner-dent space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-gold-400/90 flex items-center gap-1.5">
-                    <Sparkles size={14} className="text-gold-400" />
-                    Harvester Status
-                  </span>
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-gold-500/10 text-gold-300 border border-gold-500/30">
-                    Ready to Index
-                  </span>
+              <div className={`p-4 rounded-xl space-y-3 ${themeClasses.card}`}>
+                <div>
+                  <h2 className="text-sm font-semibold">Playlist Harvester</h2>
+                  <p className={`text-xs mt-1 leading-relaxed ${themeClasses.mutedText}`}>
+                    Scan and index all video items in your playlist before reviewing and cleaning.
+                  </p>
                 </div>
-                <p className="text-xs text-neutral-300 leading-relaxed">
-                  Smoothly scan and index all items in your {isWatchLater ? 'Watch Later' : 'playlist'} before reviewing and purging.
-                </p>
 
-                {/* Primary Scan Button (Stage 3 Ready) */}
+                {/* Primary Scan Button */}
                 <button
                   disabled={isScanning}
-                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-semibold text-xs tracking-wide bg-gradient-to-r from-gold-600 via-gold-500 to-gold-600 hover:from-gold-500 hover:to-gold-400 text-obsidian-950 shadow-gold-subtle hover:shadow-gold-glow transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
+                  className={`w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-medium text-xs tracking-wide transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${themeClasses.btnPrimary}`}
                 >
                   <RefreshCw size={15} className={isScanning ? 'animate-spin' : ''} />
                   <span>{isScanning ? 'Scanning Playlist...' : 'Scan & Index Playlist'}</span>
@@ -202,76 +226,76 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
 
               {/* Metrics Grid */}
               <div className="grid grid-cols-3 gap-2.5">
-                <div className="p-3.5 rounded-xl bg-obsidian-900/60 border border-neutral-800 text-center shadow-inner-dent">
-                  <div className="text-xl font-bold text-neutral-100">{itemCount}</div>
-                  <div className="text-[11px] text-neutral-400 uppercase tracking-wider mt-0.5">Indexed</div>
+                <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
+                  <div className="text-xl font-bold">{itemCount}</div>
+                  <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>Indexed</div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-obsidian-900/60 border border-neutral-800 text-center shadow-inner-dent">
-                  <div className="text-xl font-bold text-rose-400">0</div>
-                  <div className="text-[11px] text-neutral-400 uppercase tracking-wider mt-0.5">Dead / Private</div>
+                <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
+                  <div className="text-xl font-bold text-red-500">0</div>
+                  <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>Unavailable</div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-obsidian-900/60 border border-neutral-800 text-center shadow-inner-dent">
-                  <div className="text-xl font-bold text-gold-400">0</div>
-                  <div className="text-[11px] text-neutral-400 uppercase tracking-wider mt-0.5">100% Watched</div>
+                <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
+                  <div className="text-xl font-bold text-emerald-500">0</div>
+                  <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>100% Watched</div>
                 </div>
               </div>
 
-              {/* Filter Chips & Rules Section */}
+              {/* Filter Categories Preview */}
               <div className="space-y-2.5">
-                <div className="text-xs font-semibold text-neutral-400 uppercase tracking-wider flex items-center justify-between">
-                  <span>Quick Filter Categories</span>
-                  <span className="text-[10px] text-neutral-500">Stage 4 Preview</span>
+                <div className={`text-xs font-semibold uppercase tracking-wider flex items-center justify-between ${themeClasses.mutedText}`}>
+                  <span>Quick Filters</span>
+                  <span className="text-[10px]">Stage 4 Preview</span>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2">
-                  <button className="flex items-center justify-between p-2.5 rounded-xl text-xs bg-obsidian-900/80 border border-neutral-800 hover:border-gold-500/40 text-neutral-300 hover:text-gold-300 transition-colors">
+                  <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
                     <div className="flex items-center space-x-2">
-                      <EyeOff size={14} className="text-rose-400" />
-                      <span>Dead & Unavailable</span>
+                      <EyeOff size={14} className="text-red-500" />
+                      <span>Dead / Private</span>
                     </div>
-                    <span className="text-[10px] text-neutral-500">1 pt / 5 items</span>
+                    <span className={`text-[10px] ${themeClasses.mutedText}`}>1 pt / 5</span>
                   </button>
 
-                  <button className="flex items-center justify-between p-2.5 rounded-xl text-xs bg-obsidian-900/80 border border-neutral-800 hover:border-gold-500/40 text-neutral-300 hover:text-gold-300 transition-colors">
+                  <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
                     <div className="flex items-center space-x-2">
-                      <CheckCircle2 size={14} className="text-gold-400" />
+                      <CheckCircle2 size={14} className="text-emerald-500" />
                       <span>100% Completed</span>
                     </div>
-                    <span className="text-[10px] text-neutral-500">1 pt / item</span>
+                    <span className={`text-[10px] ${themeClasses.mutedText}`}>1 pt / 1</span>
                   </button>
 
-                  <button className="flex items-center justify-between p-2.5 rounded-xl text-xs bg-obsidian-900/80 border border-neutral-800 hover:border-gold-500/40 text-neutral-300 hover:text-gold-300 transition-colors">
+                  <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
                     <div className="flex items-center space-x-2">
-                      <Trash2 size={14} className="text-neutral-400" />
+                      <Trash2 size={14} />
                       <span>Shorts (&lt;60s)</span>
                     </div>
-                    <span className="text-[10px] text-neutral-500">1 pt / item</span>
+                    <span className={`text-[10px] ${themeClasses.mutedText}`}>1 pt / 1</span>
                   </button>
 
-                  <button className="flex items-center justify-between p-2.5 rounded-xl text-xs bg-obsidian-900/80 border border-neutral-800 hover:border-gold-500/40 text-neutral-300 hover:text-gold-300 transition-colors">
+                  <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
                     <div className="flex items-center space-x-2">
-                      <Sparkles size={14} className="text-amber-400" />
+                      <RefreshCw size={14} />
                       <span>Partially Watched</span>
                     </div>
-                    <span className="text-[10px] text-neutral-500">1 pt / item</span>
+                    <span className={`text-[10px] ${themeClasses.mutedText}`}>1 pt / 1</span>
                   </button>
                 </div>
               </div>
 
               {/* Safety & Backup Card */}
-              <div className="p-4 rounded-xl bg-obsidian-900/50 border border-neutral-800 space-y-2.5">
-                <div className="flex items-center space-x-2 text-xs font-semibold text-neutral-200">
-                  <ShieldCheck size={16} className="text-emerald-400" />
+              <div className={`p-4 rounded-xl space-y-2.5 ${themeClasses.subCard}`}>
+                <div className="flex items-center space-x-2 text-xs font-semibold">
+                  <ShieldCheck size={16} className="text-emerald-500" />
                   <span>Zero Data Loss Protection</span>
                 </div>
-                <p className="text-[11px] text-neutral-400 leading-normal">
+                <p className={`text-[11px] leading-normal ${themeClasses.mutedText}`}>
                   Export your full playlist to CSV or JSON before initiating any deletion sequence.
                 </p>
                 <button
                   disabled={itemCount === 0}
-                  className="w-full flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-medium bg-obsidian-850 hover:bg-obsidian-800 text-neutral-200 border border-neutral-700/80 hover:border-gold-500/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`w-full flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${themeClasses.btnSecondary}`}
                 >
                   <Download size={14} />
                   <span>Export Playlist Backup (CSV)</span>
@@ -281,15 +305,15 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3.5 border-t border-gold-500/20 bg-obsidian-900/70 flex items-center justify-between text-xs text-neutral-400">
+            <div className={`px-6 py-3.5 flex items-center justify-between text-xs ${themeClasses.footer}`}>
               <span className="flex items-center space-x-2">
-                <span className="text-neutral-300 font-medium">YT-WL-Gardener</span>
-                <span className="text-neutral-600">•</span>
-                <span className="text-gold-400">75 Points Free</span>
+                <span className="font-medium">YT-WL-Gardener</span>
+                <span>•</span>
+                <span>{quota.pointsRemaining} Points Available</span>
               </span>
               <button 
                 onClick={() => setIsOpen(false)}
-                className="flex items-center space-x-1 hover:text-gold-300 transition-colors"
+                className={`flex items-center space-x-1 hover:text-white transition-colors ${themeClasses.mutedText}`}
               >
                 <span>Dismiss</span>
                 <ChevronRight size={14} />

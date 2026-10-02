@@ -6,6 +6,14 @@ import styleText from './style.css?inline';
 const HOST_ELEMENT_ID = 'yt-wl-gardener-host';
 let reactRootInstance: Root | null = null;
 let lastKnownUrl = '';
+let currentIsDark = true;
+
+/**
+ * Detects whether YouTube is currently rendered in dark mode.
+ */
+function isYouTubeDarkMode(): boolean {
+  return document.documentElement.hasAttribute('dark');
+}
 
 /**
  * Checks if the current page URL is a supported YouTube playlist.
@@ -38,11 +46,29 @@ function getPlaylistInfo(url: string): { isWatchLater: boolean; listId: string }
 }
 
 /**
+ * Re-renders or updates the mounted React component.
+ */
+function renderApp(): void {
+  if (!reactRootInstance) return;
+  const info = getPlaylistInfo(window.location.href);
+  currentIsDark = isYouTubeDarkMode();
+
+  reactRootInstance.render(
+    React.createElement(FloatingApp, {
+      isWatchLater: info.isWatchLater,
+      playlistTitle: info.isWatchLater ? 'Watch Later' : `Playlist: ${info.listId}`,
+      isDark: currentIsDark,
+    })
+  );
+}
+
+/**
  * Mounts the isolated React UI inside a Shadow DOM container.
  */
 function mountUI(): void {
-  // If host already exists, don't duplicate
+  // If host already exists, just update props
   if (document.getElementById(HOST_ELEMENT_ID)) {
+    renderApp();
     return;
   }
 
@@ -50,12 +76,12 @@ function mountUI(): void {
   const host = document.createElement('div');
   host.id = HOST_ELEMENT_ID;
   host.style.position = 'relative';
-  host.style.zIndex = '2147483647'; // Maximum z-index above YouTube elements
+  host.style.zIndex = '2147483647'; // Above YouTube's overlays
 
   // Attach isolated Shadow DOM
   const shadowRoot = host.attachShadow({ mode: 'open' });
 
-  // Inject Tailwind + custom glassmorphic theme styles into Shadow DOM
+  // Inject Tailwind + YouTube theme styles into Shadow DOM
   const styleEl = document.createElement('style');
   styleEl.textContent = styleText;
   shadowRoot.appendChild(styleEl);
@@ -70,15 +96,17 @@ function mountUI(): void {
 
   // Mount React
   const info = getPlaylistInfo(window.location.href);
+  currentIsDark = isYouTubeDarkMode();
   reactRootInstance = createRoot(mountPoint);
   reactRootInstance.render(
     React.createElement(FloatingApp, {
       isWatchLater: info.isWatchLater,
       playlistTitle: info.isWatchLater ? 'Watch Later' : `Playlist: ${info.listId}`,
+      isDark: currentIsDark,
     })
   );
 
-  console.log('[YT-WL-Gardener] Mounted FAB and Drawer in Shadow DOM');
+  console.log('[YT-WL-Gardener] Mounted FAB in Shadow DOM (Dark mode:', currentIsDark, ')');
 }
 
 /**
@@ -101,7 +129,11 @@ function unmountUI(): void {
  */
 function handleUrlChange(): void {
   const currentUrl = window.location.href;
-  if (currentUrl === lastKnownUrl) return;
+  if (currentUrl === lastKnownUrl) {
+    // If URL is same, just refresh render if needed
+    renderApp();
+    return;
+  }
   lastKnownUrl = currentUrl;
 
   // Check user settings if the floating button is disabled
@@ -137,7 +169,19 @@ window.addEventListener('popstate', () => {
   handleUrlChange();
 });
 
-// 4. Fallback interval check for pushState edge cases (lightweight URL comparison)
+// 4. Watch for YouTube dark/light theme switching on <html dark>
+const themeObserver = new MutationObserver(() => {
+  const newIsDark = isYouTubeDarkMode();
+  if (newIsDark !== currentIsDark) {
+    renderApp();
+  }
+});
+themeObserver.observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ['dark'],
+});
+
+// 5. Fallback interval check for pushState edge cases
 setInterval(() => {
   if (window.location.href !== lastKnownUrl) {
     handleUrlChange();

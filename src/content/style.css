@@ -2,20 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom glassmorphism & metallic gold accents */
-.gold-gradient-text {
-  background: linear-gradient(135deg, #FFF6D6 0%, #D4AF37 50%, #AA771C 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Native YouTube Typography & Scrollbar */
+:host {
+  font-family: "Roboto", "YouTube Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: light dark;
 }
 
-.gold-border-gradient {
-  border-image: linear-gradient(to bottom right, #D4AF37, rgba(212, 175, 55, 0.2)) 1;
+/* Custom subtle scrollbar matching YouTube */
+::-webkit-scrollbar {
+  width: 8px;
 }
 
-.glass-panel {
-  background: rgba(18, 18, 20, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(212, 175, 55, 0.25);
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.yt-dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.yt-dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.yt-light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.yt-light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
 }

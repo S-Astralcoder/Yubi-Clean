@@ -3,29 +3,35 @@ export default {
   content: [
     "./src/**/*.{js,ts,jsx,tsx,html}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        gold: {
-          300: '#FDE047',
-          400: '#FACC15',
-          500: '#EAB308',
-          600: '#CA8A04',
-          700: '#A16207',
-          metallic: '#D4AF37',
-          deep: '#996515',
-        },
-        obsidian: {
-          950: '#0A0A0B',
-          900: '#121214',
-          850: '#18181B',
-          800: '#27272A',
+        yt: {
+          red: '#FF0000',
+          darkRed: '#CC0000',
+          // YouTube Dark Mode tokens
+          baseDark: '#0F0F0F',
+          surfaceDark: '#212121',
+          cardDark: '#1F1F1F',
+          hoverDark: '#272727',
+          borderDark: 'rgba(255, 255, 255, 0.12)',
+          textPrimaryDark: '#F1F1F1',
+          textSecondaryDark: '#AAAAAA',
+          // YouTube Light Mode tokens
+          baseLight: '#FFFFFF',
+          surfaceLight: '#F2F2F2',
+          cardLight: '#F8F8F8',
+          hoverLight: '#E5E5E5',
+          borderLight: 'rgba(0, 0, 0, 0.1)',
+          textPrimaryLight: '#0F0F0F',
+          textSecondaryLight: '#606060',
         }
       },
       boxShadow: {
-        'gold-glow': '0 0 20px -3px rgba(212, 175, 55, 0.35)',
-        'gold-subtle': '0 0 10px rgba(234, 179, 8, 0.2)',
-        'inner-dent': 'inset 0 1px 3px rgba(0, 0, 0, 0.7), inset 0 -1px 1px rgba(255, 255, 255, 0.05)',
+        'yt-modal': '0 16px 48px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.1)',
+        'yt-modal-light': '0 16px 48px rgba(0, 0, 0, 0.18), 0 0 1px rgba(0, 0, 0, 0.15)',
+        'yt-fab': '0 4px 20px rgba(0, 0, 0, 0.4)',
       }
     },
   },
