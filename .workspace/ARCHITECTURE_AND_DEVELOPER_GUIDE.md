@@ -97,16 +97,16 @@ Yubi Clean/
 ## 5. Sequenced Implementation Roadmap
 
 ```
-[Stage 1: Toolchain Scaffolding & MV3 Baseline] (CURRENT)
+[Stage 1: Toolchain Scaffolding & MV3 Baseline] (COMPLETED)
    ├── Vite 5 + CRXJS + TypeScript + Tailwind
    └── Clean build verification (tsc & vite build)
 
-[Stage 2: URL Detection & Injected Black/Gold Floating FAB + Shadow DOM]
+[Stage 2: URL Detection & Injected Black/Gold Floating FAB + Shadow DOM] (COMPLETED)
    ├── SPA navigation listener (`yt-navigate-finish`)
    ├── Mount/unmount on `/playlist?list=WL` and other playlists
    └── Shadow DOM isolation with frosted glass FAB & expandable drawer
 
-[Stage 3: The Harvester (Infinite Scroll & Playlist Scraping Engine)]
+[Stage 3: The Harvester (Infinite Scroll & Playlist Scraping Engine)] (UPCOMING)
    ├── DOM query extraction (ID, title, channel, duration, progress, dead tags)
    ├── Virtual scroll stepper with deduplicating Map
    └── Real-time indexing counter in UI
