@@ -11,7 +11,9 @@ import {
   Coins, 
   Square,
   FileJson,
-  Sparkles
+  Sparkles,
+  Check,
+  Minus
 } from 'lucide-react';
 import { UserQuota, VideoItem } from '../types';
 import { harvester, HarvestProgress } from '../content/harvester';
@@ -96,6 +98,38 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
       chrome.storage?.onChanged?.removeListener(storageListener);
     };
   }, []);
+
+  // Compute live selection stats for each category
+  const categoryStats = useMemo(() => {
+    const deadVideos = videosList.filter((v) => v.isUnavailable);
+    const watchedVideos = videosList.filter((v) => v.isWatched || v.watchProgressPercent >= 90);
+    const shortsVideos = videosList.filter((v) => v.durationSeconds < 60 && !v.isUnavailable);
+
+    const deadSelectedCount = deadVideos.filter((v) => selectedIds.has(v.id)).length;
+    const watchedSelectedCount = watchedVideos.filter((v) => selectedIds.has(v.id)).length;
+    const shortsSelectedCount = shortsVideos.filter((v) => selectedIds.has(v.id)).length;
+
+    return {
+      dead: {
+        total: deadVideos.length,
+        selected: deadSelectedCount,
+        isAllSelected: deadVideos.length > 0 && deadSelectedCount === deadVideos.length,
+        isPartiallySelected: deadSelectedCount > 0 && deadSelectedCount < deadVideos.length,
+      },
+      watched: {
+        total: watchedVideos.length,
+        selected: watchedSelectedCount,
+        isAllSelected: watchedVideos.length > 0 && watchedSelectedCount === watchedVideos.length,
+        isPartiallySelected: watchedSelectedCount > 0 && watchedSelectedCount < watchedVideos.length,
+      },
+      shorts: {
+        total: shortsVideos.length,
+        selected: shortsSelectedCount,
+        isAllSelected: shortsVideos.length > 0 && shortsSelectedCount === shortsVideos.length,
+        isPartiallySelected: shortsSelectedCount > 0 && shortsSelectedCount < shortsVideos.length,
+      },
+    };
+  }, [videosList, selectedIds]);
 
   // Calculate real-time points required for currently selected videos
   const { deadSelected, standardSelected, requiredPoints } = useMemo(() => {
@@ -404,38 +438,118 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                     </div>
                   </div>
 
-                  {/* Quick Category Selectors */}
+                  {/* Fully Reactive Bulk Category Selectors with Visual Checkbox State */}
                   <div className="space-y-2">
-                    <div className={`text-xs font-semibold uppercase tracking-wider ${themeClasses.mutedText}`}>
-                      Bulk Category Select
+                    <div className={`text-xs font-semibold uppercase tracking-wider flex items-center justify-between ${themeClasses.mutedText}`}>
+                      <span>Bulk Category Select</span>
+                      <span className="text-[10px]">Ticked when active</span>
                     </div>
                     
                     <div className="grid grid-cols-3 gap-2">
+                      {/* 1. Unavailable Selector Card */}
                       <button 
                         onClick={() => handleToggleCategory('dead')}
-                        className={`flex flex-col items-center justify-center p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}
+                        disabled={categoryStats.dead.total === 0}
+                        className={`relative flex flex-col items-center justify-center p-3 rounded-2xl text-xs transition-all duration-150 border ${
+                          categoryStats.dead.isAllSelected
+                            ? 'bg-red-500/20 border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.35)]'
+                            : categoryStats.dead.isPartiallySelected
+                            ? 'bg-red-500/10 border-red-500/50'
+                            : themeClasses.btnChip
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                        title="Toggle selection of all dead/unavailable videos"
                       >
-                        <EyeOff size={15} className="text-red-500 mb-1" />
-                        <span className="font-medium">Unavailable</span>
-                        <span className={`text-[11px] ${themeClasses.mutedText}`}>({harvestProgress.deadCount})</span>
+                        {/* Checkbox indicator */}
+                        <div className={`absolute top-2 right-2 flex items-center justify-center w-4 h-4 rounded border transition-colors ${
+                          categoryStats.dead.isAllSelected
+                            ? 'bg-red-500 border-red-500 text-white'
+                            : categoryStats.dead.isPartiallySelected
+                            ? 'bg-red-500/30 border-red-400 text-white'
+                            : isDark ? 'border-white/20 bg-transparent' : 'border-black/20 bg-transparent'
+                        }`}>
+                          {categoryStats.dead.isAllSelected && <Check size={11} strokeWidth={3} />}
+                          {categoryStats.dead.isPartiallySelected && <Minus size={11} strokeWidth={3} />}
+                        </div>
+
+                        <EyeOff size={18} className="text-red-500 mb-1" />
+                        <span className="font-semibold text-white">Unavailable</span>
+                        <span className={`text-[11px] font-medium mt-0.5 ${
+                          categoryStats.dead.isAllSelected ? 'text-red-400 font-bold' : themeClasses.mutedText
+                        }`}>
+                          {categoryStats.dead.selected > 0 
+                            ? `${categoryStats.dead.selected}/${categoryStats.dead.total}`
+                            : `${categoryStats.dead.total}`}
+                        </span>
                       </button>
 
+                      {/* 2. Watched Selector Card */}
                       <button 
                         onClick={() => handleToggleCategory('watched')}
-                        className={`flex flex-col items-center justify-center p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}
+                        disabled={categoryStats.watched.total === 0}
+                        className={`relative flex flex-col items-center justify-center p-3 rounded-2xl text-xs transition-all duration-150 border ${
+                          categoryStats.watched.isAllSelected
+                            ? 'bg-emerald-500/20 border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                            : categoryStats.watched.isPartiallySelected
+                            ? 'bg-emerald-500/10 border-emerald-500/50'
+                            : themeClasses.btnChip
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                        title="Toggle selection of all 100% watched videos"
                       >
-                        <CheckCircle2 size={15} className="text-emerald-500 mb-1" />
-                        <span className="font-medium">Watched</span>
-                        <span className={`text-[11px] ${themeClasses.mutedText}`}>({harvestProgress.watchedCount})</span>
+                        <div className={`absolute top-2 right-2 flex items-center justify-center w-4 h-4 rounded border transition-colors ${
+                          categoryStats.watched.isAllSelected
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : categoryStats.watched.isPartiallySelected
+                            ? 'bg-emerald-500/30 border-emerald-400 text-white'
+                            : isDark ? 'border-white/20 bg-transparent' : 'border-black/20 bg-transparent'
+                        }`}>
+                          {categoryStats.watched.isAllSelected && <Check size={11} strokeWidth={3} />}
+                          {categoryStats.watched.isPartiallySelected && <Minus size={11} strokeWidth={3} />}
+                        </div>
+
+                        <CheckCircle2 size={18} className="text-emerald-500 mb-1" />
+                        <span className="font-semibold text-white">Watched</span>
+                        <span className={`text-[11px] font-medium mt-0.5 ${
+                          categoryStats.watched.isAllSelected ? 'text-emerald-400 font-bold' : themeClasses.mutedText
+                        }`}>
+                          {categoryStats.watched.selected > 0 
+                            ? `${categoryStats.watched.selected}/${categoryStats.watched.total}`
+                            : `${categoryStats.watched.total}`}
+                        </span>
                       </button>
 
+                      {/* 3. Shorts Selector Card */}
                       <button 
                         onClick={() => handleToggleCategory('shorts')}
-                        className={`flex flex-col items-center justify-center p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}
+                        disabled={categoryStats.shorts.total === 0}
+                        className={`relative flex flex-col items-center justify-center p-3 rounded-2xl text-xs transition-all duration-150 border ${
+                          categoryStats.shorts.isAllSelected
+                            ? 'bg-blue-500/20 border-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.35)]'
+                            : categoryStats.shorts.isPartiallySelected
+                            ? 'bg-blue-500/10 border-blue-500/50'
+                            : themeClasses.btnChip
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                        title="Toggle selection of all shorts (<60s)"
                       >
-                        <Trash2 size={15} className="mb-1" />
-                        <span className="font-medium">Shorts</span>
-                        <span className={`text-[11px] ${themeClasses.mutedText}`}>(&lt;60s)</span>
+                        <div className={`absolute top-2 right-2 flex items-center justify-center w-4 h-4 rounded border transition-colors ${
+                          categoryStats.shorts.isAllSelected
+                            ? 'bg-blue-500 border-blue-500 text-white'
+                            : categoryStats.shorts.isPartiallySelected
+                            ? 'bg-blue-500/30 border-blue-400 text-white'
+                            : isDark ? 'border-white/20 bg-transparent' : 'border-black/20 bg-transparent'
+                        }`}>
+                          {categoryStats.shorts.isAllSelected && <Check size={11} strokeWidth={3} />}
+                          {categoryStats.shorts.isPartiallySelected && <Minus size={11} strokeWidth={3} />}
+                        </div>
+
+                        <Trash2 size={18} className="text-blue-400 mb-1" />
+                        <span className="font-semibold text-white">Shorts</span>
+                        <span className={`text-[11px] font-medium mt-0.5 ${
+                          categoryStats.shorts.isAllSelected ? 'text-blue-400 font-bold' : themeClasses.mutedText
+                        }`}>
+                          {categoryStats.shorts.selected > 0 
+                            ? `${categoryStats.shorts.selected}/${categoryStats.shorts.total}`
+                            : `${categoryStats.shorts.total}`}
+                        </span>
                       </button>
                     </div>
                   </div>

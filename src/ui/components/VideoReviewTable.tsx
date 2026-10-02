@@ -6,9 +6,11 @@ import {
   EyeOff, 
   CheckCircle2, 
   Clock, 
-  ExternalLink,
-  Filter,
-  X
+  ExternalLink, 
+  Filter, 
+  X,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 interface VideoReviewTableProps {
@@ -28,6 +30,39 @@ export const VideoReviewTable: React.FC<VideoReviewTableProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'dead' | 'watched' | 'shorts'>('all');
+
+  // Compute counts & selected counts per category
+  const categoryCounts = useMemo(() => {
+    let deadTotal = 0;
+    let deadSelected = 0;
+    let watchedTotal = 0;
+    let watchedSelected = 0;
+    let shortsTotal = 0;
+    let shortsSelected = 0;
+
+    for (const v of videos) {
+      const isSel = selectedIds.has(v.id);
+      if (v.isUnavailable) {
+        deadTotal++;
+        if (isSel) deadSelected++;
+      }
+      if (v.isWatched || v.watchProgressPercent >= 90) {
+        watchedTotal++;
+        if (isSel) watchedSelected++;
+      }
+      if (v.durationSeconds < 60 && !v.isUnavailable) {
+        shortsTotal++;
+        if (isSel) shortsSelected++;
+      }
+    }
+
+    return {
+      all: { total: videos.length, selected: selectedIds.size },
+      dead: { total: deadTotal, selected: deadSelected },
+      watched: { total: watchedTotal, selected: watchedSelected },
+      shorts: { total: shortsTotal, selected: shortsSelected },
+    };
+  }, [videos, selectedIds]);
 
   // Filter videos based on active category & search query
   const filteredVideos = useMemo(() => {
@@ -52,7 +87,7 @@ export const VideoReviewTable: React.FC<VideoReviewTableProps> = ({
   // Bulk actions for visible filtered list
   const handleSelectAllVisible = () => {
     const visibleIds = filteredVideos.map((v) => v.id);
-    const allSelected = visibleIds.every((id) => selectedIds.has(id));
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
     onSelectMultiple(visibleIds, !allSelected);
   };
 
@@ -64,7 +99,7 @@ export const VideoReviewTable: React.FC<VideoReviewTableProps> = ({
     itemSelected: 'bg-white/10',
     textMuted: 'text-[#AAAAAA]',
     border: 'border-white/10',
-    chipActive: 'bg-white text-black font-semibold',
+    chipActive: 'bg-white text-black font-semibold shadow-sm',
     chipInactive: 'bg-[#212121] text-neutral-300 hover:bg-[#2A2A2A] border border-white/10',
   } : {
     searchBg: 'bg-[#F2F2F2] border-black/10 text-black placeholder-neutral-400 focus:border-red-500',
@@ -72,7 +107,7 @@ export const VideoReviewTable: React.FC<VideoReviewTableProps> = ({
     itemSelected: 'bg-black/10',
     textMuted: 'text-[#606060]',
     border: 'border-black/10',
-    chipActive: 'bg-black text-white font-semibold',
+    chipActive: 'bg-black text-white font-semibold shadow-sm',
     chipInactive: 'bg-[#F2F2F2] text-neutral-800 hover:bg-[#EAEAEA] border border-black/10',
   };
 
@@ -100,54 +135,91 @@ export const VideoReviewTable: React.FC<VideoReviewTableProps> = ({
           )}
         </div>
 
-        {/* Filter Chips Bar */}
+        {/* Filter Chips Bar with Live Selection Badges */}
         <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
           <div className="flex items-center gap-1.5">
+            {/* All Tab */}
             <button
               onClick={() => setActiveFilter('all')}
-              className={`px-3 py-2 rounded-xl text-xs transition-colors ${
+              className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-xs transition-colors ${
                 activeFilter === 'all' ? themeClasses.chipActive : themeClasses.chipInactive
               }`}
             >
-              All ({videos.length})
+              <span>All ({categoryCounts.all.total})</span>
+              {categoryCounts.all.selected > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                  {categoryCounts.all.selected}
+                </span>
+              )}
             </button>
 
+            {/* Unavailable Tab */}
             <button
               onClick={() => setActiveFilter('dead')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs transition-colors ${
+              className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-xs transition-colors ${
                 activeFilter === 'dead' ? themeClasses.chipActive : themeClasses.chipInactive
               }`}
             >
-              <EyeOff size={13} className="text-red-500" />
-              <span>Unavailable</span>
+              <EyeOff size={13} className={activeFilter === 'dead' ? 'text-red-600' : 'text-red-500'} />
+              <span>Unavailable ({categoryCounts.dead.total})</span>
+              {categoryCounts.dead.selected > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                  {categoryCounts.dead.selected}
+                </span>
+              )}
             </button>
 
+            {/* Watched Tab */}
             <button
               onClick={() => setActiveFilter('watched')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs transition-colors ${
+              className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-xs transition-colors ${
                 activeFilter === 'watched' ? themeClasses.chipActive : themeClasses.chipInactive
               }`}
             >
-              <CheckCircle2 size={13} className="text-emerald-500" />
-              <span>Watched</span>
+              <CheckCircle2 size={13} className={activeFilter === 'watched' ? 'text-emerald-600' : 'text-emerald-500'} />
+              <span>Watched ({categoryCounts.watched.total})</span>
+              {categoryCounts.watched.selected > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-emerald-500 text-white text-[10px] font-bold">
+                  {categoryCounts.watched.selected}
+                </span>
+              )}
             </button>
 
+            {/* Shorts Tab */}
             <button
               onClick={() => setActiveFilter('shorts')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs transition-colors ${
+              className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-xs transition-colors ${
                 activeFilter === 'shorts' ? themeClasses.chipActive : themeClasses.chipInactive
               }`}
             >
               <Clock size={13} />
-              <span>Shorts</span>
+              <span>Shorts ({categoryCounts.shorts.total})</span>
+              {categoryCounts.shorts.selected > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-blue-500 text-white text-[10px] font-bold">
+                  {categoryCounts.shorts.selected}
+                </span>
+              )}
             </button>
           </div>
 
+          {/* Select Visible Button with Checkbox Icon */}
           <button
             onClick={handleSelectAllVisible}
-            className={`text-xs font-semibold px-3 py-2 rounded-xl border border-transparent hover:border-white/10 ${themeClasses.textMuted} hover:text-white transition-colors`}
+            className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-white/10 hover:bg-white/10 transition-colors ${
+              isAllVisibleSelected ? 'text-red-400 border-red-500/40 bg-red-500/10' : themeClasses.textMuted
+            }`}
           >
-            {isAllVisibleSelected ? 'Deselect Visible' : 'Select Visible'}
+            {isAllVisibleSelected ? (
+              <>
+                <CheckSquare size={14} className="text-red-400" />
+                <span>Deselect Visible ({filteredVideos.length})</span>
+              </>
+            ) : (
+              <>
+                <Square size={14} />
+                <span>Select Visible ({filteredVideos.length})</span>
+              </>
+            )}
           </button>
         </div>
       </div>
