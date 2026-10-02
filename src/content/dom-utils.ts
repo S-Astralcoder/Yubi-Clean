@@ -81,16 +81,50 @@ export function extractVideoMetadata(el: HTMLElement, domIndex: number): VideoIt
     const durationText = durationEl?.textContent?.trim() || '';
     const durationSeconds = parseDurationToSeconds(durationText);
 
-    // 4. Watch Progress
-    const progressEl = el.querySelector<HTMLElement>('#progress, .ytd-thumbnail-overlay-resume-playback-renderer');
+    // 4. Watch Progress & Completion Detection
     let watchProgressPercent = 0;
+    let isWatched = false;
+
+    // Check 4a: Explicit YouTube "WATCHED" overlay badge
+    const watchedOverlay = el.querySelector(
+      'ytd-thumbnail-overlay-playback-status-renderer, ytd-thumbnail-overlay-playback-status-renderer yt-formatted-string, #text.ytd-thumbnail-overlay-playback-status-renderer'
+    );
+    if (watchedOverlay && watchedOverlay.textContent?.trim().toUpperCase().includes('WATCHED')) {
+      isWatched = true;
+      watchProgressPercent = 100;
+    }
+
+    // Check 4b: Thumbnail / Link aria-label indicating watched status
+    const thumbnailLink = el.querySelector<HTMLAnchorElement>('a#thumbnail, a.ytd-thumbnail');
+    const ariaLabel = (thumbnailLink?.getAttribute('aria-label') || titleEl?.getAttribute('aria-label') || '').toLowerCase();
+    if (ariaLabel.includes('watched') || ariaLabel.includes('100%') || ariaLabel.includes('completed')) {
+      isWatched = true;
+      watchProgressPercent = 100;
+    }
+
+    // Check 4c: Resume playback progress bar inside thumbnail
+    // Note: Must explicitly target #progress, NOT the parent container!
+    const progressEl = el.querySelector<HTMLElement>(
+      'ytd-thumbnail-overlay-resume-playback-renderer #progress, #progress.ytd-thumbnail-overlay-resume-playback-renderer, div#progress'
+    );
     if (progressEl) {
-      const widthStyle = progressEl.style.width;
-      if (widthStyle) {
-        const parsedWidth = parseFloat(widthStyle);
-        if (!isNaN(parsedWidth)) {
-          watchProgressPercent = Math.min(100, Math.max(0, Math.round(parsedWidth)));
+      const rawStyle = progressEl.getAttribute('style') || progressEl.style.width || '';
+      const match = rawStyle.match(/width:\s*([\d.]+)%/i);
+      if (match && match[1]) {
+        const parsed = parseFloat(match[1]);
+        if (!isNaN(parsed)) {
+          watchProgressPercent = Math.min(100, Math.max(0, Math.round(parsed)));
         }
+      } else if (progressEl.style.width) {
+        const parsed = parseFloat(progressEl.style.width);
+        if (!isNaN(parsed)) {
+          watchProgressPercent = Math.min(100, Math.max(0, Math.round(parsed)));
+        }
+      }
+
+      // If progress is >= 90%, it's effectively completed (YouTube credits/outro)
+      if (watchProgressPercent >= 90) {
+        isWatched = true;
       }
     }
 
@@ -108,6 +142,7 @@ export function extractVideoMetadata(el: HTMLElement, domIndex: number): VideoIt
       durationText,
       durationSeconds,
       watchProgressPercent,
+      isWatched,
       isUnavailable,
       unavailableReason: reason,
       domIndex,

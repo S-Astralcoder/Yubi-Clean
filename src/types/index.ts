@@ -5,6 +5,7 @@ export interface VideoItem {
   durationText: string;
   durationSeconds: number;
   watchProgressPercent: number; // 0 to 100
+  isWatched: boolean;
   isUnavailable: boolean; // [Deleted video] or [Private video]
   unavailableReason?: 'deleted' | 'private' | 'blocked' | 'unknown';
   domIndex: number;

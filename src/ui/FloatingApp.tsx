@@ -59,7 +59,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
         let watched = 0;
         videos.forEach((v) => {
           if (v.isUnavailable) dead++;
-          else if (v.watchProgressPercent >= 99) watched++;
+          else if (v.isWatched || v.watchProgressPercent >= 90) watched++;
         });
 
         setHarvestProgress((prev) => ({

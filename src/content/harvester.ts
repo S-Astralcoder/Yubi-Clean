@@ -46,7 +46,7 @@ class HarvesterEngine {
     for (const item of this.videosMap.values()) {
       if (item.isUnavailable) {
         deadCount++;
-      } else if (item.watchProgressPercent >= 99) {
+      } else if (item.isWatched) {
         watchedCount++;
       }
     }
@@ -75,7 +75,7 @@ class HarvesterEngine {
     this.notify();
 
     const maxItems = options.maxItems ?? 5000;
-    const delayMs = options.delayMs ?? 400;
+    const delayMs = options.delayMs ?? 450;
 
     console.log('[YT-WL-Gardener] Starting playlist harvesting...');
 
@@ -113,18 +113,37 @@ class HarvesterEngine {
           previousSize = this.videosMap.size;
         }
 
-        // Check continuation spinner to determine if more items exist
-        const hasContinuation = Boolean(
-          document.querySelector('ytd-continuation-item-renderer')
-        );
+        // Check if browser has reached bottom of document
+        const scrollPos = window.scrollY || document.documentElement.scrollTop;
+        const maxScroll = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight) - window.innerHeight;
+        const isAtBottom = scrollPos >= maxScroll - 150;
 
-        // If no new items discovered after 4 scroll attempts, assume bottom reached
-        if (stalledCount >= 4 && !hasContinuation) {
-          console.log('[YT-WL-Gardener] Reached end of playlist (no more items to load).');
+        // Check if YouTube has an ACTIVE continuation spinner running
+        const activeSpinner = document.querySelector(
+          'ytd-continuation-item-renderer tp-yt-paper-spinner[active], ytd-continuation-item-renderer #spinner[active], tp-yt-paper-spinner.ytd-continuation-item-renderer[active]'
+        );
+        const hasActiveSpinner = Boolean(activeSpinner);
+
+        // Reliable completion check:
+        // A: Stalled at the bottom of the page with no active spinner
+        if (stalledCount >= 2 && isAtBottom && !hasActiveSpinner) {
+          console.log('[YT-WL-Gardener] Reached end of playlist (bottom reached, spinner inactive).');
           break;
         }
 
-        // 2. Perform smooth scroll downward to trigger next batch
+        // B: Stalled for 3 cycles and no active spinner anywhere
+        if (stalledCount >= 3 && !hasActiveSpinner) {
+          console.log('[YT-WL-Gardener] Reached end of playlist (no new items and no active spinner).');
+          break;
+        }
+
+        // C: Absolute failsafe: stalled for 5 cycles regardless of DOM state
+        if (stalledCount >= 5) {
+          console.log('[YT-WL-Gardener] Stalled for 5 cycles. Harvesting complete.');
+          break;
+        }
+
+        // 2. Perform scroll downward to trigger next batch
         window.scrollBy({ top: 1200, behavior: 'smooth' });
 
         // 3. Sleep to allow YouTube's continuation loader to fetch & mount
