@@ -8,6 +8,7 @@ export interface VideoItem {
   isUnavailable: boolean; // [Deleted video] or [Private video]
   unavailableReason?: 'deleted' | 'private' | 'blocked' | 'unknown';
   domIndex: number;
+  thumbnailUrl?: string;
 }
 
 export type HarvesterStatus = 'idle' | 'scanning' | 'paused' | 'completed' | 'error';

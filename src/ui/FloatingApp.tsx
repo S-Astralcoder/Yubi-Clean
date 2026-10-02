@@ -9,9 +9,11 @@ import {
   ChevronRight,
   ShieldCheck,
   RefreshCw,
-  Coins
+  Coins,
+  Square
 } from 'lucide-react';
 import { UserQuota } from '../types';
+import { harvester, HarvestProgress } from '../content/harvester';
 
 interface FloatingAppProps {
   playlistTitle?: string;
@@ -25,48 +27,73 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
   isDark = true
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [itemCount, setItemCount] = useState<number>(0);
   const [quota, setQuota] = useState<UserQuota>({
     pointsRemaining: 75,
     pointsTotal: 75,
     tier: 'free'
   });
 
-  // Read existing storage status if available
+  const [harvestProgress, setHarvestProgress] = useState<HarvestProgress>({
+    total: 0,
+    deadCount: 0,
+    watchedCount: 0,
+    isScanning: false,
+    isCompleted: false,
+  });
+
+  // Subscribe to harvester progress and load storage state
   useEffect(() => {
-    chrome.storage?.local?.get(['totalIndexed', 'harvesterStatus', 'quota'], (res: Record<string, any>) => {
-      if (typeof res?.totalIndexed === 'number') {
-        setItemCount(res.totalIndexed);
-      }
-      if (res?.harvesterStatus === 'scanning') {
-        setIsScanning(true);
-      }
+    // 1. Subscribe to live harvester updates
+    const unsubscribe = harvester.subscribe((p) => {
+      setHarvestProgress(p);
+    });
+
+    // 2. Load persisted quota and previous scan records
+    chrome.storage?.local?.get(['quota', 'videos', 'totalIndexed'], (res: Record<string, any>) => {
       if (res?.quota) {
         setQuota(res.quota as UserQuota);
       }
+      if (res?.videos && typeof res?.totalIndexed === 'number') {
+        const videos = Object.values(res.videos) as any[];
+        let dead = 0;
+        let watched = 0;
+        videos.forEach((v) => {
+          if (v.isUnavailable) dead++;
+          else if (v.watchProgressPercent >= 99) watched++;
+        });
+
+        setHarvestProgress((prev) => ({
+          ...prev,
+          total: res.totalIndexed,
+          deadCount: dead,
+          watchedCount: watched,
+        }));
+      }
     });
 
-    // Listen for storage changes from content script
-    const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
-      if (changes.totalIndexed && typeof changes.totalIndexed.newValue === 'number') {
-        setItemCount(changes.totalIndexed.newValue);
-      }
-      if (changes.harvesterStatus) {
-        setIsScanning(changes.harvesterStatus.newValue === 'scanning');
-      }
+    // 3. Listen for storage changes
+    const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
       if (changes.quota && changes.quota.newValue) {
         setQuota(changes.quota.newValue as UserQuota);
       }
     };
 
-    chrome.storage?.onChanged?.addListener(listener);
+    chrome.storage?.onChanged?.addListener(storageListener);
     return () => {
-      chrome.storage?.onChanged?.removeListener(listener);
+      unsubscribe();
+      chrome.storage?.onChanged?.removeListener(storageListener);
     };
   }, []);
 
   const quotaPercent = Math.max(0, Math.min(100, (quota.pointsRemaining / quota.pointsTotal) * 100));
+
+  const handleScanToggle = () => {
+    if (harvestProgress.isScanning) {
+      harvester.stop();
+    } else {
+      harvester.start();
+    }
+  };
 
   // Dynamic theme variables matching native YouTube
   const themeClasses = isDark ? {
@@ -82,6 +109,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     subCard: 'bg-[#181818]/60 border border-white/5',
     barTrack: 'bg-white/10',
     btnPrimary: 'bg-[#FF0000] hover:bg-[#CC0000] text-white shadow-md active:bg-[#AA0000]',
+    btnStop: 'bg-[#272727] hover:bg-[#383838] text-white border border-red-500/40',
     btnSecondary: 'bg-[#272727] hover:bg-[#383838] text-white border border-white/10',
     btnChip: 'bg-[#212121] hover:bg-[#2A2A2A] text-neutral-200 border border-white/10',
     footer: 'border-t border-white/10 bg-[#181818]/80 text-neutral-400',
@@ -99,6 +127,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     subCard: 'bg-[#F2F2F2]/70 border border-black/5',
     barTrack: 'bg-black/10',
     btnPrimary: 'bg-[#FF0000] hover:bg-[#CC0000] text-white shadow-sm active:bg-[#AA0000]',
+    btnStop: 'bg-[#F2F2F2] hover:bg-[#E5E5E5] text-red-600 border border-red-500/40',
     btnSecondary: 'bg-[#F2F2F2] hover:bg-[#E5E5E5] text-[#0F0F0F] border border-black/10',
     btnChip: 'bg-[#F2F2F2] hover:bg-[#EAEAEA] text-neutral-800 border border-black/10',
     footer: 'border-t border-black/10 bg-[#F9F9F9]/80 text-neutral-500',
@@ -116,11 +145,20 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
         >
           <GardenerLogo size={32} isDark={isDark} className="transition-transform duration-200 group-hover:rotate-6" />
 
-          {/* Pulse dot */}
-          <span className="absolute top-1 right-1 flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#FF0000] border border-black/20"></span>
-          </span>
+          {/* Real-time scanning animation badge on FAB */}
+          {harvestProgress.isScanning ? (
+            <span className="absolute -top-1 -right-1 flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-[#FF0000] text-[9px] font-bold text-white items-center justify-center">
+                •
+              </span>
+            </span>
+          ) : (
+            <span className="absolute top-1 right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#FF0000] border border-black/20"></span>
+            </span>
+          )}
         </button>
       )}
 
@@ -171,7 +209,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
             {/* Scrollable Content Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-              {/* Clean Usage Balance Box (Simplified - No redundant status tag) */}
+              {/* Clean Usage Balance Box */}
               <div className={`p-4 rounded-xl space-y-3 ${themeClasses.card}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2.5">
@@ -205,44 +243,66 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                 </div>
               </div>
 
-              {/* Action Banner / Scan Controller */}
+              {/* Action Banner / Harvester Controller */}
               <div className={`p-4 rounded-xl space-y-3 ${themeClasses.card}`}>
-                <div>
-                  <h2 className="text-sm font-semibold">Playlist Harvester</h2>
-                  <p className={`text-xs mt-1 leading-relaxed ${themeClasses.mutedText}`}>
-                    Scan and index all video items in your playlist before reviewing and cleaning.
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold">Playlist Harvester</h2>
+                    <p className={`text-xs mt-0.5 ${themeClasses.mutedText}`}>
+                      {harvestProgress.isScanning 
+                        ? `Auto-scrolling and indexing... Found ${harvestProgress.total} items so far.`
+                        : harvestProgress.isCompleted
+                        ? `Harvest complete! ${harvestProgress.total} videos indexed and categorized.`
+                        : 'Scan and index playlist items to identify dead videos, watched content, and durations.'}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Primary Scan Button */}
+                {/* Primary Scan / Stop Toggle Button */}
                 <button
-                  disabled={isScanning}
-                  className={`w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-medium text-xs tracking-wide transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${themeClasses.btnPrimary}`}
+                  onClick={handleScanToggle}
+                  className={`w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-medium text-xs tracking-wide transition-all duration-150 active:scale-[0.99] ${
+                    harvestProgress.isScanning ? themeClasses.btnStop : themeClasses.btnPrimary
+                  }`}
                 >
-                  <RefreshCw size={15} className={isScanning ? 'animate-spin' : ''} />
-                  <span>{isScanning ? 'Scanning Playlist...' : 'Scan & Index Playlist'}</span>
+                  {harvestProgress.isScanning ? (
+                    <>
+                      <Square size={14} className="fill-current" />
+                      <span>Stop Scanning ({harvestProgress.total} Indexed)</span>
+                    </>
+                  ) : harvestProgress.total > 0 ? (
+                    <>
+                      <RefreshCw size={14} />
+                      <span>Re-Scan Playlist ({harvestProgress.total} Items)</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw size={14} />
+                      <span>Scan & Index Playlist</span>
+                    </>
+                  )}
                 </button>
               </div>
 
-              {/* Metrics Grid */}
+              {/* Real-time Metrics Grid */}
               <div className="grid grid-cols-3 gap-2.5">
                 <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
-                  <div className="text-xl font-bold">{itemCount}</div>
+                  <div className="text-xl font-bold">{harvestProgress.total}</div>
                   <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>Indexed</div>
                 </div>
 
                 <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
-                  <div className="text-xl font-bold text-red-500">0</div>
+                  <div className="text-xl font-bold text-red-500">{harvestProgress.deadCount}</div>
                   <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>Unavailable</div>
                 </div>
 
                 <div className={`p-3.5 rounded-xl text-center ${themeClasses.subCard}`}>
-                  <div className="text-xl font-bold text-emerald-500">0</div>
+                  <div className="text-xl font-bold text-emerald-500">{harvestProgress.watchedCount}</div>
                   <div className={`text-[11px] uppercase tracking-wider mt-0.5 ${themeClasses.mutedText}`}>100% Watched</div>
                 </div>
               </div>
 
-              {/* Filter Categories Preview */}
+              {/* Filter Categories Preview (Stage 4) */}
               <div className="space-y-2.5">
                 <div className={`text-xs font-semibold uppercase tracking-wider flex items-center justify-between ${themeClasses.mutedText}`}>
                   <span>Quick Filters</span>
@@ -255,7 +315,9 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                       <EyeOff size={14} className="text-red-500" />
                       <span>Dead / Private</span>
                     </div>
-                    <span className={`text-[10px] ${themeClasses.mutedText}`}>1 pt / 5</span>
+                    <span className={`text-[10px] ${themeClasses.mutedText}`}>
+                      {harvestProgress.deadCount} items
+                    </span>
                   </button>
 
                   <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
@@ -263,7 +325,9 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                       <CheckCircle2 size={14} className="text-emerald-500" />
                       <span>100% Completed</span>
                     </div>
-                    <span className={`text-[10px] ${themeClasses.mutedText}`}>1 pt / 1</span>
+                    <span className={`text-[10px] ${themeClasses.mutedText}`}>
+                      {harvestProgress.watchedCount} items
+                    </span>
                   </button>
 
                   <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
@@ -271,7 +335,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                       <Trash2 size={14} />
                       <span>Shorts (&lt;60s)</span>
                     </div>
-                    <span className={`text-[10px] ${themeClasses.mutedText}`}>1 pt / 1</span>
+                    <span className={`text-[10px] ${themeClasses.mutedText}`}>Stage 4</span>
                   </button>
 
                   <button className={`flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors ${themeClasses.btnChip}`}>
@@ -279,7 +343,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                       <RefreshCw size={14} />
                       <span>Partially Watched</span>
                     </div>
-                    <span className={`text-[10px] ${themeClasses.mutedText}`}>1 pt / 1</span>
+                    <span className={`text-[10px] ${themeClasses.mutedText}`}>Stage 4</span>
                   </button>
                 </div>
               </div>
@@ -294,7 +358,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
                   Export your full playlist to CSV or JSON before initiating any deletion sequence.
                 </p>
                 <button
-                  disabled={itemCount === 0}
+                  disabled={harvestProgress.total === 0}
                   className={`w-full flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${themeClasses.btnSecondary}`}
                 >
                   <Download size={14} />

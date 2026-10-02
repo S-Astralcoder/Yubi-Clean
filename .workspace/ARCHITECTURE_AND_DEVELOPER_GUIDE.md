@@ -104,14 +104,14 @@ Yubi Clean/
 [Stage 2: URL Detection & Injected Black/Gold Floating FAB + Shadow DOM] (COMPLETED)
    ├── SPA navigation listener (`yt-navigate-finish`)
    ├── Mount/unmount on `/playlist?list=WL` and other playlists
-   └── Shadow DOM isolation with frosted glass FAB & expandable drawer
+   └── Shadow DOM isolation with native YouTube dark/light theme
 
-[Stage 3: The Harvester (Infinite Scroll & Playlist Scraping Engine)] (UPCOMING)
+[Stage 3: The Harvester (Infinite Scroll & Playlist Scraping Engine)] (COMPLETED)
    ├── DOM query extraction (ID, title, channel, duration, progress, dead tags)
    ├── Virtual scroll stepper with deduplicating Map
-   └── Real-time indexing counter in UI
+   └── Real-time indexing counter and scan/stop controls in UI
 
-[Stage 4: Local Algorithmic Classification, Filters & CSV Export]
+[Stage 4: Local Algorithmic Classification, Filters & CSV Export] (UPCOMING)
    ├── Filter chips: Dead/Private, Watched % slider, Channel breakdown
    ├── Interactive selection table
    └── Instant CSV / JSON export trigger
