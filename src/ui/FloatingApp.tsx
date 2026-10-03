@@ -22,6 +22,7 @@ import { exportVideosToCsv, exportVideosToJson } from '../utils/export';
 import { VideoReviewTable } from './components/VideoReviewTable';
 import { PruneProgressModal } from './components/PruneProgressModal';
 import { UpgradeModal } from './components/UpgradeModal';
+import { paymentService } from '../services/payment';
 
 interface FloatingAppProps {
   playlistTitle?: string;
@@ -80,11 +81,12 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
       setPruneProgress(p);
     });
 
-    // 3. Load persisted quota and previous scan records
-    chrome.storage?.local?.get(['quota', 'videos', 'totalIndexed'], (res: Record<string, any>) => {
-      if (res?.quota) {
-        setQuota(res.quota as UserQuota);
-      }
+    // 3. Verify storage integrity & load persisted quota and scan records
+    paymentService.verifyStorageIntegrity().then((verifiedQuota) => {
+      setQuota(verifiedQuota);
+    });
+
+    chrome.storage?.local?.get(['videos', 'totalIndexed'], (res: Record<string, any>) => {
       if (res?.videos && typeof res?.totalIndexed === 'number') {
         const videos = Object.values(res.videos) as VideoItem[];
         setVideosList(videos);

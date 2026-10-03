@@ -1,7 +1,10 @@
 /**
  * Background Service Worker (Manifest V3)
- * Handles extension lifecycle, tab tracking, and storage initialization.
+ * Handles extension lifecycle, tab tracking, storage initialization,
+ * and remote license validation heartbeats.
  */
+
+import { paymentService } from '../services/payment';
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('[YT-WL-Gardener] Installed or updated:', details.reason);
@@ -25,7 +28,17 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       harvesterStatus: 'idle',
       prunerStatus: 'idle',
     });
+  } else {
+    // Run integrity verification on update
+    await paymentService.verifyStorageIntegrity();
   }
+});
+
+// Periodic validation heartbeat when browser launches
+chrome.runtime.onStartup?.addListener(async () => {
+  console.log('[YT-WL-Gardener] Browser startup: verifying storage integrity and license...');
+  await paymentService.verifyStorageIntegrity();
+  await paymentService.validateStoredLicense();
 });
 
 // Listener for tab updates to communicate state changes if needed

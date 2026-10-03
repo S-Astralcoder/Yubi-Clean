@@ -9,7 +9,8 @@
   ],
   "host_permissions": [
     "*://www.youtube.com/*",
-    "https://*.youtube.com/*"
+    "https://*.youtube.com/*",
+    "https://api.lemonsqueezy.com/*"
   ],
   "background": {
     "service_worker": "src/background/index.ts",

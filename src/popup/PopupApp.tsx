@@ -2,14 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { GardenerLogo } from '../ui/icons/GardenerLogo';
 import { UpgradeModal } from '../ui/components/UpgradeModal';
 import { UserQuota, StorageSchema } from '../types';
-import { paymentService } from '../services/payment';
+import { paymentService, LicenseRecord } from '../services/payment';
 import { 
   Sparkles, 
   ExternalLink, 
   Zap, 
   Settings as SettingsIcon, 
   Layers,
-  RotateCcw
+  RotateCcw,
+  Key,
+  CheckCircle2
 } from 'lucide-react';
 
 export const PopupApp: React.FC = () => {
@@ -20,6 +22,7 @@ export const PopupApp: React.FC = () => {
     pointsTotal: 75,
     tier: 'free',
   });
+  const [activeLicense, setActiveLicense] = useState<LicenseRecord | null>(null);
   const [settings, setSettings] = useState<StorageSchema['settings']>({
     floatingIconEnabled: true,
     autoScrollSpeedMs: 400,
@@ -44,9 +47,16 @@ export const PopupApp: React.FC = () => {
       }
     });
 
-    // 2. Load stored quota and settings
-    chrome.storage?.local?.get(['quota', 'settings'], (res: Record<string, any>) => {
-      if (res?.quota) setQuota(res.quota as UserQuota);
+    // 2. Anti-tamper verification & state loading
+    paymentService.verifyStorageIntegrity().then((verifiedQuota) => {
+      setQuota(verifiedQuota);
+    });
+
+    paymentService.getStoredLicense().then((rec) => {
+      setActiveLicense(rec);
+    });
+
+    chrome.storage?.local?.get(['settings'], (res: Record<string, any>) => {
       if (res?.settings) setSettings(res.settings as StorageSchema['settings']);
     });
 
@@ -54,6 +64,9 @@ export const PopupApp: React.FC = () => {
     const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
       if (changes.quota?.newValue) {
         setQuota(changes.quota.newValue as UserQuota);
+      }
+      if (changes.licenseRecord) {
+        setActiveLicense((changes.licenseRecord.newValue as LicenseRecord) ?? null);
       }
       if (changes.settings?.newValue) {
         setSettings(changes.settings.newValue as StorageSchema['settings']);
@@ -79,26 +92,19 @@ export const PopupApp: React.FC = () => {
     chrome.tabs?.create({ url: 'https://www.youtube.com/playlist?list=WL' });
   };
 
-  // Quick sandbox helper to add test points
-  const handleAddTestPoints = async (amount: number) => {
-    const updated: UserQuota = {
-      ...quota,
-      pointsRemaining: quota.pointsRemaining + amount,
-      pointsTotal: quota.pointsTotal + amount,
-    };
+  // Quick sandbox helper to simulate Deep Clean or Pro upgrade
+  const handleTestSimulate = async (tier: 'deep_clean' | 'pro') => {
+    const updated = await paymentService.simulateCheckout(tier);
     setQuota(updated);
-    await chrome.storage?.local?.set({ quota: updated });
+    const rec = await paymentService.getStoredLicense();
+    setActiveLicense(rec);
   };
 
-  // Reset quota to initial free tier
+  // Reset quota to clean initial free tier
   const handleResetFree = async () => {
-    const updated: UserQuota = {
-      pointsRemaining: 75,
-      pointsTotal: 75,
-      tier: 'free',
-    };
+    const updated = await paymentService.resetToFree();
     setQuota(updated);
-    await chrome.storage?.local?.set({ quota: updated });
+    setActiveLicense(null);
   };
 
   const isPro = quota.tier === 'pro';
@@ -191,13 +197,40 @@ export const PopupApp: React.FC = () => {
             <span>Upgrade</span>
           </button>
         </div>
+
+        {activeLicense && (
+          <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px]">
+            <div className="flex items-center space-x-1.5 text-emerald-400">
+              <CheckCircle2 size={13} />
+              <span className="font-semibold">Active Key:</span>
+              <span className="font-mono text-neutral-300">
+                {activeLicense.key.length > 12 
+                  ? `${activeLicense.key.slice(0, 4)}••••${activeLicense.key.slice(-4)}`
+                  : activeLicense.key}
+              </span>
+            </div>
+            <span className="text-[10px] text-neutral-400 uppercase font-bold">
+              {activeLicense.tier}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── 4. SETTINGS & TOGGLES ── */}
       <div className="p-3.5 rounded-2xl bg-[#1E1E22] border border-white/10 space-y-3">
-        <div className="flex items-center space-x-2 text-xs font-semibold text-neutral-300">
-          <SettingsIcon size={15} />
-          <span>Extension Settings</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-xs font-semibold text-neutral-300">
+            <SettingsIcon size={15} />
+            <span>Extension Settings</span>
+          </div>
+
+          <button
+            onClick={() => setIsUpgradeModalOpen(true)}
+            className="flex items-center space-x-1 text-[11px] text-neutral-400 hover:text-white transition-colors"
+          >
+            <Key size={11} className="text-amber-400" />
+            <span>Enter License Key</span>
+          </button>
         </div>
 
         {/* Floating Action Button Toggle */}
@@ -232,20 +265,27 @@ export const PopupApp: React.FC = () => {
             <span>Sandbox Test Controls</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-3 gap-1.5 text-xs">
             <button
-              onClick={() => handleAddTestPoints(100)}
-              className="py-1.5 px-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-200 text-[11px] font-medium transition-colors"
+              onClick={() => handleTestSimulate('deep_clean')}
+              className="py-1.5 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-200 text-[10px] font-medium transition-colors text-center"
             >
-              +100 Points
+              +1,000 Pts
+            </button>
+
+            <button
+              onClick={() => handleTestSimulate('pro')}
+              className="py-1.5 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-200 text-[10px] font-medium transition-colors text-center"
+            >
+              Lifetime Pro
             </button>
 
             <button
               onClick={handleResetFree}
-              className="flex items-center justify-center space-x-1 py-1.5 px-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-400 hover:text-white text-[11px] font-medium transition-colors"
+              className="flex items-center justify-center space-x-1 py-1.5 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-400 hover:text-white text-[10px] font-medium transition-colors text-center"
             >
-              <RotateCcw size={11} />
-              <span>Reset Free</span>
+              <RotateCcw size={10} />
+              <span>Reset</span>
             </button>
           </div>
         </div>
