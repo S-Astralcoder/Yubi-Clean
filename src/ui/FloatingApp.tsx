@@ -58,6 +58,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
   const [pruneProgress, setPruneProgress] = useState<PruneProgress>({
     total: 0,
     completed: 0,
+    failed: 0,
     currentTitle: '',
     currentId: '',
     status: 'idle',
@@ -348,10 +349,12 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
     mutedText: 'text-[#606060]',
   };
 
+  const isPruningActive = pruneProgress.status === 'running' || pruneProgress.status === 'paused';
+
   return (
     <div className={`font-sans antialiased select-none ${themeClasses.container}`}>
       {/* ── 1. Floating Action Button (FAB) ── */}
-      {!isOpen && (
+      {!isOpen && !isPruningActive && (
         <button
           onClick={() => setIsOpen(true)}
           className={`fixed bottom-6 right-6 z-[9999999] group flex items-center justify-center w-14 h-14 rounded-full backdrop-blur-md transition-all duration-200 hover:scale-105 active:scale-95 ${themeClasses.fab}`}
@@ -383,7 +386,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
       )}
 
       {/* ── 2. Full-Size Centered Dashboard Modal (90% Width / 88% Height) ── */}
-      {isOpen && (
+      {isOpen && !isPruningActive && (
         <>
           {/* Ambient Backdrop */}
           <div 
@@ -782,33 +785,33 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
             </div>
 
           </div>
-
-          {/* ── Stage 5: Prune Confirmation & Progress Modal ── */}
-          <PruneProgressModal
-            isOpen={isPruneModalOpen}
-            onClose={() => setIsPruneModalOpen(false)}
-            onConfirmStart={handleConfirmStartPrune}
-            onPause={() => pruner.pause()}
-            onResume={() => pruner.resume()}
-            onAbort={() => pruner.abort()}
-            onExportCsv={() => handleExportCsv(false)}
-            progress={pruneProgress}
-            selectedCount={selectedIds.size}
-            requiredPoints={requiredPoints}
-            pointsRemaining={quota.pointsRemaining}
-            isDark={isDark}
-          />
-
-          {/* ── Stage 6: Upgrade & Monetization Modal ── */}
-          <UpgradeModal
-            isOpen={isUpgradeModalOpen}
-            onClose={() => setIsUpgradeModalOpen(false)}
-            quota={quota}
-            isDark={isDark}
-            onQuotaUpdated={(newQuota) => setQuota(newQuota)}
-          />
         </>
       )}
+
+      {/* ── Stage 5: Prune Confirmation & Progress Modal ── */}
+      <PruneProgressModal
+        isOpen={isPruneModalOpen}
+        onClose={() => setIsPruneModalOpen(false)}
+        onConfirmStart={handleConfirmStartPrune}
+        onPause={() => pruner.pause()}
+        onResume={() => pruner.resume()}
+        onAbort={() => pruner.abort()}
+        onExportCsv={() => handleExportCsv(false)}
+        progress={pruneProgress}
+        selectedCount={selectedIds.size}
+        requiredPoints={requiredPoints}
+        pointsRemaining={quota.pointsRemaining}
+        isDark={isDark}
+      />
+
+      {/* ── Stage 6: Upgrade & Monetization Modal ── */}
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        quota={quota}
+        isDark={isDark}
+        onQuotaUpdated={(newQuota) => setQuota(newQuota)}
+      />
     </div>
   );
 };

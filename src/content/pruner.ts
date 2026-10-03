@@ -3,6 +3,7 @@ import { VideoItem } from '../types';
 export interface PruneProgress {
   total: number;
   completed: number;
+  failed: number;
   currentTitle: string;
   currentId: string;
   status: 'idle' | 'running' | 'paused' | 'aborted' | 'finished' | 'error';
@@ -19,6 +20,7 @@ class PrunerEngine {
   private currentProgress: PruneProgress = {
     total: 0,
     completed: 0,
+    failed: 0,
     currentTitle: '',
     currentId: '',
     status: 'idle',
@@ -79,18 +81,41 @@ class PrunerEngine {
   }
 
   /**
+   * Dispatches realistic composed pointer and mouse events across Web Component shadow boundaries.
+   */
+  private dispatchComposedClick(el: HTMLElement): void {
+    const rect = el.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+    const eventInit: MouseEventInit = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      clientX,
+      clientY,
+    };
+
+    el.dispatchEvent(new PointerEvent('pointerdown', eventInit));
+    el.dispatchEvent(new MouseEvent('mousedown', eventInit));
+    el.dispatchEvent(new PointerEvent('pointerup', eventInit));
+    el.dispatchEvent(new MouseEvent('mouseup', eventInit));
+    el.click();
+  }
+
+  /**
    * Executes the sequential, throttled top-down deletion queue.
    */
   public async executePrune(
     targetVideos: VideoItem[],
     options: { throttleDelayMs?: number } = {}
-  ): Promise<{ deletedIds: string[]; wasAborted: boolean }> {
+  ): Promise<{ deletedIds: string[]; failedIds: string[]; wasAborted: boolean }> {
     if (this.status === 'running') {
       console.warn('[YT-WL-Gardener] Pruner is already running.');
-      return { deletedIds: [], wasAborted: false };
+      return { deletedIds: [], failedIds: [], wasAborted: false };
     }
 
-    const throttleDelayMs = options.throttleDelayMs ?? 550;
+    const throttleDelayMs = options.throttleDelayMs ?? 600;
     this.status = 'running';
     this.pauseRequested = false;
     this.abortRequested = false;
@@ -98,12 +123,15 @@ class PrunerEngine {
     this.notify({
       total: targetVideos.length,
       completed: 0,
+      failed: 0,
       currentTitle: '',
       currentId: '',
       status: 'running',
+      errorMessage: undefined,
     });
 
     const deletedIds: string[] = [];
+    const failedIds: string[] = [];
 
     try {
       for (let i = 0; i < targetVideos.length; i++) {
@@ -123,6 +151,7 @@ class PrunerEngine {
         const target = targetVideos[i];
         this.notify({
           completed: deletedIds.length,
+          failed: failedIds.length,
           currentTitle: target.title,
           currentId: target.id,
         });
@@ -134,31 +163,36 @@ class PrunerEngine {
 
         if (!targetElement) {
           console.warn(`[YT-WL-Gardener] Could not locate video in DOM: "${target.title}". Skipping.`);
+          failedIds.push(target.id);
+          this.notify({ failed: failedIds.length });
           continue;
         }
 
-        // 4. Scroll target into center view
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        // 4. Instant scroll target into center view (instant avoid smooth scroll latency)
+        targetElement.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
+        await new Promise((resolve) => setTimeout(resolve, 200));
 
         // 5. Open action menu
         const menuOpened = await this.openActionMenu(targetElement);
         if (!menuOpened) {
           console.warn(`[YT-WL-Gardener] Failed to open menu for: "${target.title}". Skipping.`);
+          failedIds.push(target.id);
+          this.notify({ failed: failedIds.length });
           continue;
         }
 
         // 6. Find and click "Remove from..." action item
         const removed = await this.clickRemoveAction();
         if (!removed) {
-          console.warn(`[YT-WL-Gardener] Could not find "Remove" option for: "${target.title}". Closing menu.`);
-          // Click document body to dismiss lingering dropdown
+          console.warn(`[YT-WL-Gardener] Could not find "Remove" option for: "${target.title}". Dismissing.`);
           document.body.click();
-          await new Promise((resolve) => setTimeout(resolve, 300));
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          failedIds.push(target.id);
+          this.notify({ failed: failedIds.length });
           continue;
         }
 
-        // 7. Verify removal / detachment
+        // 7. Verify removal / detachment from DOM
         await this.awaitRemovalOrDisappearance(targetElement);
 
         deletedIds.push(target.id);
@@ -168,7 +202,16 @@ class PrunerEngine {
         await new Promise((resolve) => setTimeout(resolve, throttleDelayMs));
       }
 
-      this.status = this.abortRequested ? 'aborted' : 'finished';
+      if (this.abortRequested) {
+        this.status = 'aborted';
+      } else if (deletedIds.length === 0 && targetVideos.length > 0) {
+        this.status = 'error';
+        this.notify({
+          errorMessage: 'YouTube menu items were not detected. Check that you are in Watch Later and have permission to edit this playlist.',
+        });
+      } else {
+        this.status = 'finished';
+      }
     } catch (err: any) {
       console.error('[YT-WL-Gardener] Pruner encountered an error:', err);
       this.status = 'error';
@@ -179,10 +222,10 @@ class PrunerEngine {
         currentTitle: '',
         currentId: '',
       });
-      console.log(`[YT-WL-Gardener] Pruner ended. Total removed: ${deletedIds.length}/${targetVideos.length}`);
+      console.log(`[YT-WL-Gardener] Pruner ended. Removed: ${deletedIds.length}, Failed: ${failedIds.length}`);
     }
 
-    return { deletedIds, wasAborted: this.abortRequested };
+    return { deletedIds, failedIds, wasAborted: this.abortRequested };
   }
 
   /**
@@ -193,7 +236,6 @@ class PrunerEngine {
     const maxScrollAttempts = 8;
 
     while (attempts < maxScrollAttempts) {
-      // Look for anchor matching Video ID
       const renderers = Array.from(
         document.querySelectorAll<HTMLElement>('ytd-playlist-video-renderer')
       );
@@ -222,8 +264,8 @@ class PrunerEngine {
       }
 
       // If not found in current visible DOM, scroll down to load more
-      window.scrollBy({ top: 800, behavior: 'smooth' });
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      window.scrollBy({ top: 800, behavior: 'instant' as ScrollBehavior });
+      await new Promise((resolve) => setTimeout(resolve, 300));
       attempts++;
     }
 
@@ -232,28 +274,45 @@ class PrunerEngine {
 
   /**
    * Clicks the 3-dot action menu button on a video renderer.
+   * Targets the native <button> inside Polymer custom element wrappers.
    */
   private async openActionMenu(rendererEl: HTMLElement): Promise<boolean> {
-    const menuBtn = rendererEl.querySelector<HTMLElement>(
-      'ytd-menu-renderer yt-icon-button#button, #menu yt-icon-button#button, yt-icon-button.ytd-menu-renderer, #menu button, yt-icon-button'
+    // 1. Hover video row to reveal the hidden 3-dot menu button
+    rendererEl.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, composed: true }));
+    rendererEl.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, composed: true }));
+
+    // 2. Locate native button first, then wrapper
+    const nativeBtn = rendererEl.querySelector<HTMLElement>(
+      'button[aria-label="Action menu"], #menu button, yt-icon-button#button button, ytd-menu-renderer button'
     );
+    const wrapperBtn = rendererEl.querySelector<HTMLElement>(
+      'ytd-menu-renderer yt-icon-button#button, #menu yt-icon-button#button, yt-icon-button'
+    );
+    const targetBtn = nativeBtn || wrapperBtn;
 
-    if (!menuBtn) return false;
+    if (!targetBtn) {
+      console.warn('[YT-WL-Gardener] 3-dot action button not found on video row');
+      return false;
+    }
 
-    menuBtn.click();
+    // 3. Dispatch composed click
+    this.dispatchComposedClick(targetBtn);
 
-    // Await dropdown to appear
-    const maxWaitMs = 1500;
-    const intervalMs = 100;
+    // 4. Await dropdown to appear in the DOM
+    const maxWaitMs = 1200;
+    const intervalMs = 80;
     let waited = 0;
 
     while (waited < maxWaitMs) {
-      const dropdown = document.querySelector<HTMLElement>(
-        'tp-yt-iron-dropdown:not([aria-hidden="true"]), ytd-menu-popup-renderer'
-      );
-      if (dropdown && dropdown.offsetParent !== null) {
+      if (this.isDropdownOpen()) {
         return true;
       }
+
+      // Retry click at halfway mark if still not open
+      if (waited === 480) {
+        this.dispatchComposedClick(targetBtn);
+      }
+
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
       waited += intervalMs;
     }
@@ -262,30 +321,90 @@ class PrunerEngine {
   }
 
   /**
-   * Searches the opened popup menu for "Remove from..." and clicks it.
+   * Checks whether YouTube's action menu dropdown is actively open and visible.
    */
-  private async clickRemoveAction(): Promise<boolean> {
-    await new Promise((resolve) => setTimeout(resolve, 150)); // Allow animation to settle
-
-    // Query all menu items inside visible dropdowns
-    const items = Array.from(
-      document.querySelectorAll<HTMLElement>(
-        'tp-yt-iron-dropdown:not([aria-hidden="true"]) ytd-menu-service-item-renderer, ytd-menu-popup-renderer ytd-menu-service-item-renderer, tp-yt-paper-item, ytd-menu-service-item-renderer'
-      )
+  private isDropdownOpen(): boolean {
+    // Check all iron-dropdown elements
+    const dropdowns = Array.from(
+      document.querySelectorAll<HTMLElement>('tp-yt-iron-dropdown, ytd-popup-container')
     );
 
-    for (const item of items) {
-      const text = item.textContent?.toLowerCase().trim() || '';
-      if (text.includes('remove from') || text.includes('remove') || text.includes('delete')) {
-        item.click();
+    for (const dd of dropdowns) {
+      const isHidden = 
+        dd.getAttribute('aria-hidden') === 'true' || 
+        dd.style.display === 'none' ||
+        dd.style.visibility === 'hidden';
 
-        // Check if a confirmation dialog pops up
+      if (!isHidden) {
+        // Verify child menu items exist and have rendered layout
+        const items = dd.querySelectorAll<HTMLElement>(
+          'ytd-menu-service-item-renderer, tp-yt-paper-item, yt-formatted-string'
+        );
+        for (const item of Array.from(items)) {
+          if (item.offsetParent !== null) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Searches the opened popup menu for "Remove from..." and clicks it directly.
+   */
+  private async clickRemoveAction(): Promise<boolean> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    // Candidates: paper items and text elements inside dropdown containers
+    const candidateSelectors = [
+      'tp-yt-iron-dropdown:not([aria-hidden="true"]) yt-formatted-string',
+      'tp-yt-iron-dropdown:not([aria-hidden="true"]) tp-yt-paper-item',
+      'ytd-popup-container yt-formatted-string',
+      'ytd-popup-container tp-yt-paper-item',
+      'ytd-menu-popup-renderer yt-formatted-string',
+      'ytd-menu-popup-renderer tp-yt-paper-item',
+    ];
+
+    const elements = Array.from(
+      document.querySelectorAll<HTMLElement>(candidateSelectors.join(', '))
+    );
+
+    for (const el of elements) {
+      // Must be visible on screen
+      if (el.offsetParent === null) continue;
+
+      const text = el.textContent?.toLowerCase().trim() || '';
+
+      const isMatch =
+        text.includes('remove from') ||
+        text.includes('remove') ||
+        text.includes('delete') ||
+        text.includes('supprimer') ||
+        text.includes('entfernen') ||
+        text.includes('verwijderen') ||
+        text.includes('eliminar');
+
+      if (isMatch) {
+        console.log(`[YT-WL-Gardener] Click target matched: "${text}"`);
+
+        // Click the text element
+        this.dispatchComposedClick(el);
+
+        // Also click parent paper-item if distinct
+        const parentPaper = el.closest<HTMLElement>('tp-yt-paper-item');
+        if (parentPaper && parentPaper !== el) {
+          this.dispatchComposedClick(parentPaper);
+        }
+
+        // Check if YouTube presents a confirmation dialog (e.g. "Remove from playlist?")
         await new Promise((resolve) => setTimeout(resolve, 200));
         const confirmBtn = document.querySelector<HTMLElement>(
-          'yt-confirm-dialog-renderer #confirm-button, yt-button-renderer#confirm-button button'
+          'yt-confirm-dialog-renderer #confirm-button button, yt-confirm-dialog-renderer #confirm-button, yt-button-renderer#confirm-button button'
         );
-        if (confirmBtn) {
-          confirmBtn.click();
+        if (confirmBtn && confirmBtn.offsetParent !== null) {
+          this.dispatchComposedClick(confirmBtn);
         }
 
         return true;
