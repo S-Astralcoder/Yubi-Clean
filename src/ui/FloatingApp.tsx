@@ -251,7 +251,13 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
       setIsUpgradeModalOpen(true);
       return;
     }
+    pruner.reset();
     setIsPruneModalOpen(true);
+  };
+
+  const handleClosePruneModal = () => {
+    pruner.reset();
+    setIsPruneModalOpen(false);
   };
 
   const handleConfirmStartPrune = async () => {
@@ -791,7 +797,7 @@ export const FloatingApp: React.FC<FloatingAppProps> = ({
       {/* ── Stage 5: Prune Confirmation & Progress Modal ── */}
       <PruneProgressModal
         isOpen={isPruneModalOpen}
-        onClose={() => setIsPruneModalOpen(false)}
+        onClose={handleClosePruneModal}
         onConfirmStart={handleConfirmStartPrune}
         onPause={() => pruner.pause()}
         onResume={() => pruner.resume()}

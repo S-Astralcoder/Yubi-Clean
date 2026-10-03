@@ -81,6 +81,26 @@ class PrunerEngine {
   }
 
   /**
+   * Resets the pruner state and counters back to idle.
+   */
+  public reset(): void {
+    this.status = 'idle';
+    this.pauseRequested = false;
+    this.abortRequested = false;
+    this.currentProgress = {
+      total: 0,
+      completed: 0,
+      failed: 0,
+      currentTitle: '',
+      currentId: '',
+      status: 'idle',
+      errorMessage: undefined,
+    };
+    this.notify(this.currentProgress);
+    console.log('[YT-WL-Gardener] Pruner reset to idle.');
+  }
+
+  /**
    * Dispatches realistic composed pointer and mouse events across Web Component shadow boundaries.
    */
   private dispatchComposedClick(el: HTMLElement): void {
