@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "package": "npm run build && powershell -Command \"Compress-Archive -Path dist/* -DestinationPath release-v0.1.0.zip -Force\""
   },
   "dependencies": {
     "lucide-react": "^0.453.0",

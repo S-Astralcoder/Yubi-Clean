@@ -135,10 +135,11 @@ Yubi Clean/
    ├── Upgrade & pricing modal (`UpgradeModal.tsx`) for Deep Clean Pass ($4.99) and Lifetime Pro ($9.99)
    └── Full tier enforcement and quota sync across in-page dashboard and browser action popup
 
-[Stage 7: Production Build, Asset Generation & CWS Metadata Readiness] (UPCOMING)
-   ├── Extension icons (16px, 48px, 128px)
-   ├── CHROMEWEBSTORE.md metadata and permissions justification
-   └── Distribution zip artifact
+[Stage 7: Production Build, Asset Generation & CWS Metadata Readiness] (COMPLETED)
+   ├── High-resolution extension icons (16px, 32px, 48px, 128px) in icons/
+   ├── CHROMEWEBSTORE.md store listing copy, privacy policy, and permissions justifications
+   ├── Automatic distribution packaging script (`npm run package`)
+   └── Clean production zip artifact ready for Chrome Web Store upload (`release-v0.1.0.zip`)
 ```
 
 ---
@@ -156,7 +157,13 @@ npm run build
 ```
 This produces a compiled, ready-to-load extension in the `./dist` folder.
 
-### 6.3 Loading the Extension in Google Chrome
+### 6.3 Package for Chrome Web Store Submission
+```bash
+npm run package
+```
+Runs a fresh TypeScript check, builds `dist/`, and archives all assets into `release-v0.1.0.zip` ready for direct upload to the Chrome Web Store Developer Dashboard.
+
+### 6.4 Loading the Extension in Google Chrome (Development)
 1. Open Google Chrome and navigate to `chrome://extensions/`.
 2. Enable **Developer mode** (toggle in the top-right corner).
 3. Click **Load unpacked** in the top-left corner.
